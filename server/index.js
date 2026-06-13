@@ -2,6 +2,7 @@ import 'dotenv/config';
 import express from 'express';
 import path from 'path';
 import { fileURLToPath } from 'url';
+import { webhookCallback } from 'grammy';
 import { bot } from '../bot/index.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -269,14 +270,29 @@ app.get('/api/masters/by-tg/:telegram_id', async (req, res) => {
 
 async function start() {
   await initDb();
+
+  const hasToken = process.env.BOT_TOKEN && process.env.BOT_TOKEN !== 'YOUR_BOT_TOKEN_HERE';
+
+  if (hasToken && process.env.NODE_ENV === 'production') {
+    // Webhook rejimi — Render uchun to'g'ri yol
+    const webhookUrl = `${process.env.WEBAPP_URL}/webhook`;
+    await bot.api.setWebhook(webhookUrl);
+    app.post('/webhook', webhookCallback(bot, 'express'));
+    console.log('Bot webhook rejimida ishlamoqda:', webhookUrl);
+  }
+
   app.listen(PORT, () => {
     console.log(`Server ishlamoqda: http://localhost:${PORT}`);
   });
-  if (process.env.BOT_TOKEN && process.env.BOT_TOKEN !== 'YOUR_BOT_TOKEN_HERE') {
+
+  if (hasToken && process.env.NODE_ENV !== 'production') {
+    // Long polling — local development uchun
     bot.start();
-    console.log('Bot ishlamoqda...');
-  } else {
-    console.log('BOT_TOKEN topilmadi — bot o\'chirilgan (faqat server ishlamoqda)');
+    console.log('Bot long polling rejimida ishlamoqda...');
+  }
+
+  if (!hasToken) {
+    console.log('BOT_TOKEN topilmadi — faqat server ishlamoqda');
   }
 }
 
