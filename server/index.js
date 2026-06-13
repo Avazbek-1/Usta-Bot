@@ -15,7 +15,7 @@ app.use(express.static(path.join(__dirname, '../webapp')));
 // === JSONBIN DB ===
 class JSONBinDB {
   constructor() {
-    this.data = { masters: [], clients: [], reviews: [], waiting_clients: [] };
+    this.data = { masters: [], clients: [], reviews: [], waiting_clients: [], orders: [] };
     this.apiKey  = process.env.JSONBIN_API_KEY;
     this.binId   = process.env.JSONBIN_BIN_ID;
     this._base   = `https://api.jsonbin.io/v3/b/${this.binId}`;
@@ -57,6 +57,7 @@ async function initDb() {
       if (res.ok) {
         const json = await res.json();
         db.data = json.record;
+        if (!db.data.orders) db.data.orders = [];
         console.log('JSONBin: ma\'lumotlar yuklandi ✅');
       } else {
         console.warn('JSONBin: yuklab bo\'lmadi, bo\'sh boshlanadi');
@@ -272,6 +273,54 @@ app.delete('/api/masters/:id/photos/:index', async (req, res) => {
   master.photos.splice(idx, 1);
   await db.write();
   res.json({ ok: true, photos: master.photos });
+});
+
+// POST /api/orders
+app.post('/api/orders', async (req, res) => {
+  await db.read();
+  const { client_telegram_id, client_name, profession, district, description } = req.body;
+  if (!client_telegram_id || !profession || !district) {
+    return res.status(400).json({ error: 'Majburiy maydonlar to\'ldirilmagan' });
+  }
+  const order = {
+    id: Date.now(),
+    client_telegram_id: Number(client_telegram_id),
+    client_name: client_name || 'Mijoz',
+    profession,
+    district,
+    description: description || '',
+    created_at: new Date().toISOString(),
+    is_active: true,
+    contacts: 0,
+  };
+  db.data.orders.push(order);
+  await db.write();
+  res.json({ ok: true, order });
+});
+
+// GET /api/orders?professions=suvoqchi,elektrik
+app.get('/api/orders', async (req, res) => {
+  await db.read();
+  const { professions } = req.query;
+  let results = db.data.orders.filter(o => o.is_active);
+  if (professions) {
+    const profArr = professions.split(',').map(p => p.trim()).filter(Boolean);
+    if (profArr.length > 0) {
+      results = results.filter(o => profArr.includes(o.profession));
+    }
+  }
+  results.sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
+  res.json(results);
+});
+
+// POST /api/orders/:id/contact
+app.post('/api/orders/:id/contact', async (req, res) => {
+  await db.read();
+  const order = db.data.orders.find(o => o.id === Number(req.params.id));
+  if (!order) return res.status(404).json({ error: 'Buyurtma topilmadi' });
+  order.contacts++;
+  await db.write();
+  res.json({ ok: true, client_telegram_id: order.client_telegram_id });
 });
 
 // GET /api/masters/:telegram_id/by-tg

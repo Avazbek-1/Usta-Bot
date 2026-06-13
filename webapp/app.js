@@ -51,6 +51,8 @@ const PAGES = {
   RATING: 'rating',
   NOT_FOUND: 'not_found',
   EDIT_PROFILE: 'edit_profile',
+  ORDER_FORM: 'order_form',
+  ORDERS: 'orders',
 };
 
 let currentPage = PAGES.LOADING;
@@ -72,6 +74,8 @@ function goBack() {
     case PAGES.EDIT_PROFILE: navigate(PAGES.MASTER_HOME); break;
     case PAGES.MY_PROFILE:   navigate(PAGES.MASTER_HOME); break;
     case PAGES.NOT_FOUND:    navigate(PAGES.ONBOARDING); break;
+    case PAGES.ORDER_FORM:   navigate(PAGES.CLIENT_HOME); break;
+    case PAGES.ORDERS:       navigate(PAGES.MASTER_HOME); break;
     default: break;
   }
 }
@@ -106,6 +110,8 @@ function render() {
     case PAGES.RATING:       app.innerHTML = renderRating(); bindRating(); break;
     case PAGES.NOT_FOUND:    app.innerHTML = renderNotFound(); bindNotFound(); break;
     case PAGES.EDIT_PROFILE: app.innerHTML = renderEditProfile(); bindEditProfile(); break;
+    case PAGES.ORDER_FORM:   app.innerHTML = renderOrderForm(); bindOrderForm(); break;
+    case PAGES.ORDERS:       app.innerHTML = renderOrders(); bindOrders(); break;
     default: app.innerHTML = renderLoading();
   }
 }
@@ -350,7 +356,7 @@ window.setNav = function(tab) {
   if (tab === 'home') navigate(PAGES.MASTER_HOME);
   else if (tab === 'photos') navigate(PAGES.PHOTOS);
   else if (tab === 'profile') navigate(PAGES.EDIT_PROFILE);
-  else if (tab === 'orders') showToast('Buyurtmalar tez orada 📋');
+  else if (tab === 'orders') navigate(PAGES.ORDERS);
 };
 
 // --- REGISTER (3 steps) ---
@@ -601,7 +607,12 @@ function renderClientHome() {
         ${PROFESSIONS.map(p => `
           <div class="chip" data-prof="${p.id}">${p.emoji} ${p.label}</div>`).join('')}
       </div>
-      ${!isMasterBrowsing ? `<button class="btn-ghost btn-gap" onclick="navigate('${PAGES.ONBOARDING}')">↩ Rolni o'zgartirish</button>` : ''}
+      ${!isMasterBrowsing ? `
+        <div style="margin-top:8px;padding-top:16px;border-top:1px solid #eee">
+          <div style="font-size:13px;color:#888;text-align:center;margin-bottom:10px">Kerakli ustani topmadingizmi?</div>
+          <button class="btn-secondary" onclick="navigate('${PAGES.ORDER_FORM}')">📝 Buyurtma berish</button>
+        </div>
+        <button class="btn-ghost btn-gap" onclick="navigate('${PAGES.ONBOARDING}')">↩ Rolni o'zgartirish</button>` : ''}
     </div>
     ${navBtns}
   </div>`;
@@ -1094,6 +1105,146 @@ function bindRating() {
       showToast('❌ ' + err.message);
     }
   });
+}
+
+// --- ORDER FORM (client creates order) ---
+function renderOrderForm() {
+  return `
+  <div class="page">
+    <div class="page-header">
+      <button class="back-btn" onclick="navigate('${PAGES.CLIENT_HOME}')">←</button>
+      <div class="page-title">Buyurtma berish</div>
+    </div>
+    <div class="page-content">
+      <div class="form-group">
+        <label class="form-label">Qanday usta kerak?</label>
+        <div class="chip-grid" id="orderProfGrid">
+          ${PROFESSIONS.map(p => `<div class="chip" data-prof="${p.id}">${p.emoji} ${p.label}</div>`).join('')}
+        </div>
+        <div class="form-error" id="orderProfErr"></div>
+      </div>
+      <div class="form-group">
+        <label class="form-label">Hudud</label>
+        <div class="chip-grid" id="orderDistGrid">
+          ${DISTRICTS.map(d => `<div class="chip" data-dist="${d.id}">${d.emoji} ${d.label}</div>`).join('')}
+        </div>
+        <div class="form-error" id="orderDistErr"></div>
+      </div>
+      <div class="form-group">
+        <label class="form-label">Qisqacha tavsif (ixtiyoriy)</label>
+        <textarea id="orderDesc" placeholder="Masalan: vannaxona 15 kv.m, seramika yotqizish..." style="width:100%;min-height:80px;border:1.5px solid var(--border);border-radius:10px;padding:10px;font-size:15px;resize:none;box-sizing:border-box;font-family:inherit" maxlength="300"></textarea>
+      </div>
+      <button class="btn-primary" id="orderSubmitBtn">📝 Buyurtma yuborish</button>
+    </div>
+  </div>`;
+}
+
+function bindOrderForm() {
+  let orderProf = '';
+  let orderDist = '';
+
+  document.querySelectorAll('#orderProfGrid .chip').forEach(el => {
+    el.addEventListener('click', () => {
+      document.querySelectorAll('#orderProfGrid .chip').forEach(c => c.classList.remove('selected'));
+      el.classList.add('selected');
+      orderProf = el.dataset.prof;
+    });
+  });
+
+  document.querySelectorAll('#orderDistGrid .chip').forEach(el => {
+    el.addEventListener('click', () => {
+      document.querySelectorAll('#orderDistGrid .chip').forEach(c => c.classList.remove('selected'));
+      el.classList.add('selected');
+      orderDist = el.dataset.dist;
+    });
+  });
+
+  document.getElementById('orderSubmitBtn')?.addEventListener('click', async () => {
+    document.getElementById('orderProfErr').textContent = '';
+    document.getElementById('orderDistErr').textContent = '';
+    if (!orderProf) { document.getElementById('orderProfErr').textContent = 'Kasb tanlang'; return; }
+    if (!orderDist) { document.getElementById('orderDistErr').textContent = 'Hudud tanlang'; return; }
+
+    const desc = document.getElementById('orderDesc').value.trim();
+    try {
+      await api('POST', '/api/orders', {
+        client_telegram_id: userId,
+        client_name: tgUser?.first_name || 'Mijoz',
+        profession: orderProf,
+        district: orderDist,
+        description: desc,
+      });
+      showToast('✅ Buyurtma yuborildi! Ustalar siz bilan bog\'lanadi.');
+      navigate(PAGES.CLIENT_HOME);
+    } catch (err) {
+      showToast('❌ ' + err.message);
+    }
+  });
+}
+
+// --- ORDERS (master sees incoming orders) ---
+function renderOrders() {
+  return `
+  <div class="page">
+    <div class="page-header">
+      <button class="back-btn" onclick="navigate('${PAGES.MASTER_HOME}')">←</button>
+      <div class="page-title">Buyurtmalar</div>
+    </div>
+    <div class="page-content" id="ordersList">
+      <div style="text-align:center;padding:40px"><div class="spinner" style="margin:0 auto"></div></div>
+    </div>
+    <nav class="bottom-nav">
+      <button class="nav-btn" onclick="setNav('home')"><span class="nav-icon">🏠</span><span>Bosh</span></button>
+      <button class="nav-btn" onclick="setNav('photos')"><span class="nav-icon">📸</span><span>Rasmlar</span></button>
+      <button class="nav-btn active"><span class="nav-icon">📋</span><span>Buyurtmalar</span></button>
+      <button class="nav-btn" onclick="setNav('profile')"><span class="nav-icon">👤</span><span>Profil</span></button>
+    </nav>
+  </div>`;
+}
+
+async function bindOrders() {
+  const container = document.getElementById('ordersList');
+  if (!container || !masterData) return;
+
+  try {
+    const profStr = (masterData.professions || []).join(',');
+    const orders = await api('GET', `/api/orders?professions=${encodeURIComponent(profStr)}`);
+
+    if (orders.length === 0) {
+      container.innerHTML = `
+        <div style="text-align:center;padding:48px 16px;color:#999">
+          <div style="font-size:44px;margin-bottom:12px">📋</div>
+          <div style="font-weight:700;font-size:16px;color:#555;margin-bottom:8px">Hozircha buyurtma yo'q</div>
+          <div style="font-size:14px">Sizning kasbingizga mos buyurtmalar shu yerda ko'rinadi</div>
+        </div>`;
+      return;
+    }
+
+    container.innerHTML = orders.map(o => {
+      const prof = PROFESSIONS.find(p => p.id === o.profession);
+      const dist = DISTRICTS.find(d => d.id === o.district);
+      return `
+        <div class="card" style="margin-bottom:12px" data-oid="${o.id}" data-ctid="${o.client_telegram_id}">
+          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px">
+            <div style="font-weight:700;font-size:15px">${prof?.emoji || '🛠️'} ${prof?.label || o.profession}</div>
+            <div style="font-size:12px;color:#aaa">${formatDate(o.created_at)}</div>
+          </div>
+          <div style="font-size:14px;color:#666;margin-bottom:4px">${dist?.emoji || '📍'} ${dist?.label || o.district}</div>
+          <div style="font-size:13px;color:#888;margin-bottom:8px">👤 ${o.client_name}</div>
+          ${o.description ? `<div style="font-size:14px;color:#333;background:#f7f8fa;border-radius:8px;padding:8px 10px;margin-bottom:10px;font-style:italic">"${o.description}"</div>` : ''}
+          <button class="btn-primary order-contact-btn" style="padding:10px" data-oid="${o.id}" data-ctid="${o.client_telegram_id}">✈️ Telegram orqali bog'lanish</button>
+        </div>`;
+    }).join('');
+
+    container.querySelectorAll('.order-contact-btn').forEach(btn => {
+      btn.addEventListener('click', async () => {
+        try { await api('POST', `/api/orders/${btn.dataset.oid}/contact`); } catch (_) {}
+        window.location.href = `tg://user?id=${btn.dataset.ctid}`;
+      });
+    });
+  } catch (err) {
+    container.innerHTML = `<div style="text-align:center;padding:40px;color:#999">Xato yuz berdi</div>`;
+  }
 }
 
 // --- NOT FOUND ---
