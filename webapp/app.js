@@ -58,10 +58,35 @@ let appState = {};
 let masterData = null;
 let currentNav = 'home';
 
+// === BACK BUTTON ===
+const ROOT_PAGES = [PAGES.LOADING, PAGES.ONBOARDING, PAGES.MASTER_HOME, PAGES.CLIENT_HOME];
+
+function goBack() {
+  switch (currentPage) {
+    case PAGES.REGISTER:     window.goBackFromRegister(); break;
+    case PAGES.SEARCH:       navigate(PAGES.CLIENT_HOME); break;
+    case PAGES.RESULTS:      navigate(PAGES.SEARCH); break;
+    case PAGES.PROFILE:      navigate(PAGES.RESULTS); break;
+    case PAGES.RATING:       navigate(PAGES.PROFILE); break;
+    case PAGES.PHOTOS:       navigate(PAGES.MASTER_HOME); break;
+    case PAGES.EDIT_PROFILE: navigate(PAGES.MASTER_HOME); break;
+    case PAGES.MY_PROFILE:   navigate(PAGES.MASTER_HOME); break;
+    case PAGES.NOT_FOUND:    navigate(PAGES.ONBOARDING); break;
+    default: break;
+  }
+}
+
+if (tg && tg.BackButton) {
+  tg.BackButton.onClick(goBack);
+}
+
 // === ROUTER ===
 function navigate(page, data = {}) {
   appState = { ...appState, ...data };
   currentPage = page;
+  if (tg && tg.BackButton) {
+    ROOT_PAGES.includes(page) ? tg.BackButton.hide() : tg.BackButton.show();
+  }
   render();
 }
 
