@@ -1,0 +1,997 @@
+// === CONSTANTS ===
+const PROFESSIONS = [
+  { id: 'suvoqchi',  emoji: '🪣', label: 'Suvoqchi' },
+  { id: 'elektrik',  emoji: '⚡', label: 'Elektrik' },
+  { id: 'plitachi',  emoji: '🔲', label: 'Plitachi' },
+  { id: 'boyoqchi',  emoji: '🎨', label: "Bo'yoqchi" },
+  { id: 'santexnik', emoji: '🔧', label: 'Santexnik' },
+  { id: 'gipschi',   emoji: '🏗️', label: 'Gipschi' },
+  { id: 'derazachi', emoji: '🪟', label: 'Derazachi' },
+  { id: 'shipchi',   emoji: '⬆️', label: 'Ship ustasi' },
+  { id: 'temirchi',  emoji: '🔩', label: 'Temirchi' },
+  { id: 'boshqa',    emoji: '🛠️', label: 'Boshqa' },
+];
+
+const DISTRICTS = [
+  { id: 'fargona_shahar', emoji: '🏙️', label: "Farg'ona shahar" },
+  { id: 'margilan',       emoji: '🕌', label: "Marg'ilon" },
+  { id: 'qoqon',          emoji: '🌆', label: "Qo'qon" },
+  { id: 'quva',           emoji: '📍', label: 'Quva' },
+  { id: 'beshariq',       emoji: '📍', label: 'Beshariq' },
+  { id: 'buvayda',        emoji: '📍', label: 'Buvayda' },
+  { id: 'dangara',        emoji: '📍', label: "Dang'ara" },
+  { id: 'oltiariq',       emoji: '📍', label: 'Oltiariq' },
+  { id: 'rishton',        emoji: '📍', label: 'Rishton' },
+  { id: 'uchkoprik',      emoji: '📍', label: "Uchko'prik" },
+];
+
+// === TELEGRAM INIT ===
+const tg = window.Telegram && window.Telegram.WebApp ? window.Telegram.WebApp : null;
+if (tg) {
+  tg.expand();
+  tg.setHeaderColor('#0088cc');
+  tg.ready();
+}
+
+const tgUser = tg ? tg.initDataUnsafe?.user : null;
+const userId = tgUser?.id || null;
+
+// === STATE ===
+const PAGES = {
+  LOADING: 'loading',
+  ONBOARDING: 'onboarding',
+  MASTER_HOME: 'master_home',
+  CLIENT_HOME: 'client_home',
+  REGISTER: 'register',
+  SEARCH: 'search',
+  RESULTS: 'results',
+  PROFILE: 'profile',
+  MY_PROFILE: 'my_profile',
+  PHOTOS: 'photos',
+  RATING: 'rating',
+  NOT_FOUND: 'not_found',
+  EDIT_PROFILE: 'edit_profile',
+};
+
+let currentPage = PAGES.LOADING;
+let appState = {};
+let masterData = null;
+let currentNav = 'home';
+
+// === ROUTER ===
+function navigate(page, data = {}) {
+  appState = { ...appState, ...data };
+  currentPage = page;
+  render();
+}
+
+function render() {
+  const app = document.getElementById('app');
+  switch (currentPage) {
+    case PAGES.LOADING:      app.innerHTML = renderLoading(); break;
+    case PAGES.ONBOARDING:   app.innerHTML = renderOnboarding(); break;
+    case PAGES.MASTER_HOME:  app.innerHTML = renderMasterHome(); bindMasterHome(); break;
+    case PAGES.CLIENT_HOME:  app.innerHTML = renderClientHome(); bindClientHome(); break;
+    case PAGES.REGISTER:     app.innerHTML = renderRegister(); bindRegister(); break;
+    case PAGES.SEARCH:       app.innerHTML = renderSearch(); bindSearch(); break;
+    case PAGES.RESULTS:      app.innerHTML = renderResults(); bindResults(); break;
+    case PAGES.PROFILE:      app.innerHTML = renderProfile(); bindProfile(); break;
+    case PAGES.MY_PROFILE:   app.innerHTML = renderMyProfile(); bindMyProfile(); break;
+    case PAGES.PHOTOS:       app.innerHTML = renderPhotos(); bindPhotos(); break;
+    case PAGES.RATING:       app.innerHTML = renderRating(); bindRating(); break;
+    case PAGES.NOT_FOUND:    app.innerHTML = renderNotFound(); bindNotFound(); break;
+    case PAGES.EDIT_PROFILE: app.innerHTML = renderEditProfile(); bindEditProfile(); break;
+    default: app.innerHTML = renderLoading();
+  }
+}
+
+// === API ===
+async function api(method, path, body) {
+  const opts = { method, headers: { 'Content-Type': 'application/json' } };
+  if (body) opts.body = JSON.stringify(body);
+  const res = await fetch(path, opts);
+  const data = await res.json();
+  if (!res.ok) throw new Error(data.error || 'Server xatosi');
+  return data;
+}
+
+// === IMAGE COMPRESSION ===
+function compressImage(file) {
+  return new Promise((resolve) => {
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      const img = new Image();
+      img.onload = () => {
+        const MAX = 800;
+        let w = img.width, h = img.height;
+        if (w > MAX || h > MAX) {
+          if (w > h) { h = Math.round(h * MAX / w); w = MAX; }
+          else { w = Math.round(w * MAX / h); h = MAX; }
+        }
+        const canvas = document.createElement('canvas');
+        canvas.width = w;
+        canvas.height = h;
+        canvas.getContext('2d').drawImage(img, 0, 0, w, h);
+        resolve(canvas.toDataURL('image/jpeg', 0.7));
+      };
+      img.src = e.target.result;
+    };
+    reader.readAsDataURL(file);
+  });
+}
+
+// === TOAST ===
+function showToast(msg, duration = 2500) {
+  let t = document.querySelector('.toast');
+  if (!t) {
+    t = document.createElement('div');
+    t.className = 'toast';
+    document.body.appendChild(t);
+  }
+  t.textContent = msg;
+  t.classList.add('show');
+  setTimeout(() => t.classList.remove('show'), duration);
+}
+
+// === HELPERS ===
+function getInitials(name) {
+  return name.split(' ').map(w => w[0]).join('').toUpperCase().slice(0, 2);
+}
+
+function getProfLabel(id) {
+  return PROFESSIONS.find(p => p.id === id) || { emoji: '🛠️', label: id };
+}
+
+function getDistrictLabel(id) {
+  return DISTRICTS.find(d => d.id === id) || { emoji: '📍', label: id };
+}
+
+function renderStars(rating, count) {
+  const full = Math.round(rating);
+  const stars = '⭐'.repeat(full) + '☆'.repeat(5 - full);
+  return `${stars} <span style="color:#666;font-size:13px">${rating > 0 ? rating : ''} ${count > 0 ? '· ' + count + ' izoh' : ''}</span>`;
+}
+
+function formatDate(iso) {
+  return new Date(iso).toLocaleDateString('uz-UZ');
+}
+
+// === PAGES ===
+
+function renderLoading() {
+  return `<div class="loading-screen"><div class="spinner"></div><p>Yuklanmoqda...</p></div>`;
+}
+
+// --- ONBOARDING ---
+function renderOnboarding() {
+  return `
+  <div class="onboarding">
+    <div class="onboarding-logo">🏗️</div>
+    <div class="onboarding-title">Farg'ona Usta</div>
+    <div class="onboarding-sub">Qurilish platformasi</div>
+    <div class="onboarding-btns">
+      <button class="btn-primary" onclick="handleOnboarding('master')">👷 Men ustaman</button>
+      <button class="btn-secondary btn-gap" onclick="handleOnboarding('client')">🏠 Menga usta kerak</button>
+    </div>
+  </div>`;
+}
+
+async function handleOnboarding(role) {
+  if (role === 'master') {
+    navigate(PAGES.REGISTER);
+  } else {
+    if (userId) {
+      try {
+        await api('POST', '/api/waiting', { telegram_id: userId, profession: '', district: '' });
+      } catch (_) {}
+    }
+    navigate(PAGES.CLIENT_HOME);
+  }
+}
+window.handleOnboarding = handleOnboarding;
+
+// --- MASTER HOME ---
+function renderMasterHome() {
+  if (!masterData) return renderLoading();
+  const prof = getProfLabel(masterData.profession);
+  const dist = getDistrictLabel(masterData.district);
+  const initials = getInitials(masterData.name);
+  return `
+  <div class="page">
+    <div class="profile-header card" style="margin:0;border-radius:0">
+      <div class="avatar avatar-lg">${initials}</div>
+      <div class="name">${masterData.name}</div>
+      <div class="profession">${prof.emoji} ${prof.label} · ${dist.emoji} ${dist.label}</div>
+    </div>
+    <div class="page-content">
+      <div class="stats-row card">
+        <div class="stat-card">
+          <div class="stat-value">${masterData.views}</div>
+          <div class="stat-label">Ko'rish</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-value">${masterData.contacts}</div>
+          <div class="stat-label">Murojaat</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-value">${masterData.rating > 0 ? '⭐' + masterData.rating : '—'}</div>
+          <div class="stat-label">Reyting</div>
+        </div>
+      </div>
+      <button class="btn-primary" id="addPhotoBtn">📸 Rasm qo'shish</button>
+      <button class="btn-secondary btn-gap" id="editProfileBtn">✏️ Profilni tahrirlash</button>
+    </div>
+    <nav class="bottom-nav">
+      <button class="nav-btn ${currentNav==='home'?'active':''}" onclick="setNav('home')">
+        <span class="nav-icon">🏠</span><span>Bosh</span>
+      </button>
+      <button class="nav-btn ${currentNav==='photos'?'active':''}" onclick="setNav('photos')">
+        <span class="nav-icon">📸</span><span>Rasmlar</span>
+      </button>
+      <button class="nav-btn ${currentNav==='requests'?'active':''}" onclick="setNav('requests')">
+        <span class="nav-icon">🔔</span><span>So'rovlar</span>
+      </button>
+      <button class="nav-btn ${currentNav==='profile'?'active':''}" onclick="setNav('profile')">
+        <span class="nav-icon">👤</span><span>Profil</span>
+      </button>
+    </nav>
+  </div>`;
+}
+
+function bindMasterHome() {
+  document.getElementById('addPhotoBtn')?.addEventListener('click', () => navigate(PAGES.PHOTOS));
+  document.getElementById('editProfileBtn')?.addEventListener('click', () => navigate(PAGES.EDIT_PROFILE));
+}
+
+window.setNav = function(tab) {
+  currentNav = tab;
+  if (tab === 'home') navigate(PAGES.MASTER_HOME);
+  else if (tab === 'photos') navigate(PAGES.PHOTOS);
+  else if (tab === 'profile') navigate(PAGES.EDIT_PROFILE);
+  else if (tab === 'requests') {
+    showToast('So\'rovlar tez orada qo\'shiladi 🔔');
+  }
+};
+
+// --- REGISTER (3 steps) ---
+let regStep = 1;
+let regData = { name: '', profession: '', district: '', phone: '', photos: [] };
+
+function renderRegister() {
+  const dots = [1,2,3].map(i => `<div class="dot ${i < regStep ? 'done' : i === regStep ? 'active' : ''}"></div>`).join('');
+  if (regStep === 1) return renderRegStep1(dots);
+  if (regStep === 2) return renderRegStep2(dots);
+  return renderRegStep3(dots);
+}
+
+function renderRegStep1(dots) {
+  return `
+  <div class="page">
+    <div class="page-header">
+      <button class="back-btn" onclick="goBackFromRegister()">←</button>
+      <div style="flex:1">
+        <div class="page-title">Ro'yxatdan o'tish</div>
+        <div style="display:flex;gap:6px;margin-top:6px">${dots}</div>
+      </div>
+      <span style="color:#999;font-size:13px">1/3</span>
+    </div>
+    <div class="page-content">
+      <div class="form-group">
+        <label class="form-label">Ismingiz</label>
+        <input type="text" id="regName" placeholder="Ism va familiya" value="${regData.name}" maxlength="50">
+        <div class="form-error" id="nameErr"></div>
+      </div>
+      <div class="form-group">
+        <label class="form-label">Kasbingiz</label>
+        <div class="chip-grid" id="profGrid">
+          ${PROFESSIONS.map(p => `
+            <div class="chip ${regData.profession===p.id?'selected':''}" data-prof="${p.id}">
+              ${p.emoji} ${p.label}
+            </div>`).join('')}
+        </div>
+        <div class="form-error" id="profErr"></div>
+      </div>
+      <button class="btn-primary" id="step1Next">Davom etish →</button>
+    </div>
+  </div>`;
+}
+
+function renderRegStep2(dots) {
+  return `
+  <div class="page">
+    <div class="page-header">
+      <button class="back-btn" onclick="regBack()">←</button>
+      <div style="flex:1">
+        <div class="page-title">Ro'yxatdan o'tish</div>
+        <div style="display:flex;gap:6px;margin-top:6px">${dots}</div>
+      </div>
+      <span style="color:#999;font-size:13px">2/3</span>
+    </div>
+    <div class="page-content">
+      <div class="form-group">
+        <label class="form-label">Hudud</label>
+        <div class="chip-grid" id="distGrid">
+          ${DISTRICTS.map(d => `
+            <div class="chip ${regData.district===d.id?'selected':''}" data-dist="${d.id}">
+              ${d.emoji} ${d.label}
+            </div>`).join('')}
+        </div>
+        <div class="form-error" id="distErr"></div>
+      </div>
+      <div class="form-group">
+        <label class="form-label">Telefon raqam</label>
+        <input type="tel" id="regPhone" placeholder="+998901234567" value="${regData.phone}">
+        <div class="form-error" id="phoneErr"></div>
+      </div>
+      <button class="btn-primary" id="step2Next">Davom etish →</button>
+    </div>
+  </div>`;
+}
+
+function renderRegStep3(dots) {
+  const photoSlots = [];
+  for (let i = 0; i < 3; i++) {
+    if (i < regData.photos.length) {
+      photoSlots.push(`<div class="photo-cell"><img src="${regData.photos[i]}" alt=""></div>`);
+    } else {
+      photoSlots.push(`<div class="photo-cell empty" id="addPhoto${i}">+</div>`);
+    }
+  }
+  return `
+  <div class="page">
+    <div class="page-header">
+      <button class="back-btn" onclick="regBack()">←</button>
+      <div style="flex:1">
+        <div class="page-title">Deyarli tayyor!</div>
+        <div style="display:flex;gap:6px;margin-top:6px">${dots}</div>
+      </div>
+      <span style="color:#999;font-size:13px">3/3</span>
+    </div>
+    <div class="page-content">
+      <div class="form-group">
+        <label class="form-label">Ishlaringiz rasmlari (ixtiyoriy)</label>
+        <div class="photo-grid">${photoSlots.join('')}</div>
+        <input type="file" id="photoInput" accept="image/*" style="display:none">
+      </div>
+      <button class="btn-primary" id="finishReg">✅ Ro'yxatdan o'tish</button>
+      <button class="btn-ghost btn-gap" id="skipPhotos">O'tkazib yuborish</button>
+    </div>
+  </div>`;
+}
+
+function bindRegister() {
+  if (regStep === 1) {
+    document.querySelectorAll('#profGrid .chip').forEach(el => {
+      el.addEventListener('click', () => {
+        regData.profession = el.dataset.prof;
+        document.querySelectorAll('#profGrid .chip').forEach(c => c.classList.remove('selected'));
+        el.classList.add('selected');
+      });
+    });
+    document.getElementById('step1Next')?.addEventListener('click', () => {
+      regData.name = document.getElementById('regName').value.trim();
+      let ok = true;
+      if (regData.name.length < 2) {
+        document.getElementById('nameErr').textContent = 'Ism kamida 2 belgi bo\'lsin';
+        ok = false;
+      } else document.getElementById('nameErr').textContent = '';
+      if (!regData.profession) {
+        document.getElementById('profErr').textContent = 'Kasbni tanlang';
+        ok = false;
+      } else document.getElementById('profErr').textContent = '';
+      if (ok) { regStep = 2; render(); }
+    });
+  } else if (regStep === 2) {
+    document.querySelectorAll('#distGrid .chip').forEach(el => {
+      el.addEventListener('click', () => {
+        regData.district = el.dataset.dist;
+        document.querySelectorAll('#distGrid .chip').forEach(c => c.classList.remove('selected'));
+        el.classList.add('selected');
+      });
+    });
+    document.getElementById('step2Next')?.addEventListener('click', () => {
+      regData.phone = document.getElementById('regPhone').value.trim();
+      let ok = true;
+      if (!regData.district) {
+        document.getElementById('distErr').textContent = 'Hududni tanlang';
+        ok = false;
+      } else document.getElementById('distErr').textContent = '';
+      if (!regData.phone.match(/^\+998\d{9}$/)) {
+        document.getElementById('phoneErr').textContent = 'Telefon: +998XXXXXXXXX format';
+        ok = false;
+      } else document.getElementById('phoneErr').textContent = '';
+      if (ok) { regStep = 3; render(); }
+    });
+  } else {
+    document.getElementById('photoInput')?.addEventListener('change', handlePhotoUpload);
+    for (let i = 0; i < 3; i++) {
+      document.getElementById('addPhoto' + i)?.addEventListener('click', () => {
+        document.getElementById('photoInput').click();
+      });
+    }
+    document.getElementById('finishReg')?.addEventListener('click', submitRegister);
+    document.getElementById('skipPhotos')?.addEventListener('click', submitRegister);
+  }
+}
+
+async function handlePhotoUpload(e) {
+  const file = e.target.files[0];
+  if (!file) return;
+  const compressed = await compressImage(file);
+  if (regData.photos.length < 10) {
+    regData.photos.push(compressed);
+    render();
+  }
+}
+
+async function submitRegister() {
+  const btn = document.getElementById('finishReg');
+  if (btn) btn.disabled = true;
+  try {
+    const payload = {
+      telegram_id: userId || Date.now(),
+      name: regData.name,
+      phone: regData.phone,
+      profession: regData.profession,
+      district: regData.district,
+      photos: regData.photos,
+    };
+    const res = await api('POST', '/api/masters', payload);
+    masterData = res.master;
+    regStep = 1;
+    regData = { name: '', profession: '', district: '', phone: '', photos: [] };
+    showToast('✅ Muvaffaqiyatli ro\'yxatdan o\'tdingiz!');
+    navigate(PAGES.MASTER_HOME);
+  } catch (err) {
+    showToast('❌ ' + err.message);
+    if (btn) btn.disabled = false;
+  }
+}
+
+window.regBack = function() {
+  if (regStep > 1) { regStep--; render(); }
+};
+
+window.goBackFromRegister = function() {
+  regStep = 1;
+  regData = { name: '', profession: '', district: '', phone: '', photos: [] };
+  navigate(PAGES.ONBOARDING);
+};
+
+// --- CLIENT HOME ---
+function renderClientHome() {
+  const navBtns = `
+  <nav class="bottom-nav">
+    <button class="nav-btn ${currentNav==='search'?'active':''}" onclick="setClientNav('search')">
+      <span class="nav-icon">🔍</span><span>Qidirish</span>
+    </button>
+    <button class="nav-btn ${currentNav==='reviews'?'active':''}" onclick="setClientNav('reviews')">
+      <span class="nav-icon">⭐</span><span>Baholarim</span>
+    </button>
+  </nav>`;
+  return `
+  <div class="page">
+    <div style="background:var(--blue);padding:24px 16px 20px">
+      <div style="color:white;font-size:22px;font-weight:800">Farg'ona Usta 🏗️</div>
+      <div style="color:rgba(255,255,255,0.8);font-size:15px;margin-top:4px">Qanday usta kerak?</div>
+    </div>
+    <div class="page-content">
+      <div class="chip-grid" id="profSelect">
+        ${PROFESSIONS.map(p => `
+          <div class="chip" data-prof="${p.id}">${p.emoji} ${p.label}</div>`).join('')}
+      </div>
+    </div>
+    ${navBtns}
+  </div>`;
+}
+
+function bindClientHome() {
+  document.querySelectorAll('#profSelect .chip').forEach(el => {
+    el.addEventListener('click', () => {
+      navigate(PAGES.SEARCH, { selectedProfession: el.dataset.prof });
+    });
+  });
+}
+
+window.setClientNav = function(tab) {
+  currentNav = tab;
+  if (tab === 'search') navigate(PAGES.CLIENT_HOME);
+  else showToast('Baholarim tez orada ⭐');
+};
+
+// --- SEARCH (district selection) ---
+function renderSearch() {
+  const prof = getProfLabel(appState.selectedProfession);
+  return `
+  <div class="page">
+    <div class="page-header">
+      <button class="back-btn" onclick="navigate('${PAGES.CLIENT_HOME}')">←</button>
+      <div class="page-title">${prof.emoji} ${prof.label}</div>
+    </div>
+    <div class="page-content">
+      <div style="color:#666;margin-bottom:12px;font-size:15px">Qaysi hududda?</div>
+      <div class="chip-grid" id="distSelect">
+        ${DISTRICTS.map(d => `
+          <div class="chip" data-dist="${d.id}">${d.emoji} ${d.label}</div>`).join('')}
+      </div>
+    </div>
+  </div>`;
+}
+
+function bindSearch() {
+  document.querySelectorAll('#distSelect .chip').forEach(el => {
+    el.addEventListener('click', async () => {
+      navigate(PAGES.LOADING);
+      try {
+        const q = `?profession=${appState.selectedProfession}&district=${el.dataset.dist}`;
+        const results = await api('GET', '/api/masters/search' + q);
+        navigate(PAGES.RESULTS, { searchResults: results, selectedDistrict: el.dataset.dist });
+      } catch (err) {
+        showToast('❌ ' + err.message);
+        navigate(PAGES.SEARCH);
+      }
+    });
+  });
+}
+
+// --- RESULTS ---
+function renderResults() {
+  const results = appState.searchResults || [];
+  const prof = getProfLabel(appState.selectedProfession);
+  const dist = getDistrictLabel(appState.selectedDistrict);
+
+  if (results.length === 0) {
+    return `
+    <div class="page">
+      <div class="page-header">
+        <button class="back-btn" onclick="navigate('${PAGES.SEARCH}')">←</button>
+        <div class="page-title">${prof.emoji} ${prof.label} · ${dist.label}</div>
+      </div>
+      <div class="empty-state">
+        <div class="empty-icon">😔</div>
+        <div class="empty-title">Hozircha usta yo'q</div>
+        <div class="empty-text">Bu hududda hozircha ${prof.label.toLowerCase()} yo'q.<br>Usta ro'yxatdan o'tgach sizga xabar beramiz!</div>
+        <div style="height:24px"></div>
+        <button class="btn-primary" id="leaveNumber">📱 Raqamni qoldirish</button>
+        <button class="btn-ghost btn-gap" onclick="navigate('${PAGES.SEARCH}')">← Boshqa qidirish</button>
+      </div>
+    </div>`;
+  }
+
+  const cards = results.map(m => `
+    <div class="master-card" data-id="${m.id}">
+      <div class="avatar">${getInitials(m.name)}</div>
+      <div class="info">
+        <div class="name">${m.name}</div>
+        <div class="meta">${renderStars(m.rating, m.review_count)}</div>
+      </div>
+      <div class="arrow">›</div>
+    </div>`).join('');
+
+  return `
+  <div class="page">
+    <div class="page-header">
+      <button class="back-btn" onclick="navigate('${PAGES.SEARCH}')">←</button>
+      <div class="page-title">${prof.emoji} ${prof.label} · ${dist.label}</div>
+    </div>
+    <div class="page-content">
+      <div style="color:#666;margin-bottom:12px;font-size:14px">${results.length} ta usta topildi</div>
+      ${cards}
+    </div>
+  </div>`;
+}
+
+function bindResults() {
+  document.querySelectorAll('.master-card').forEach(el => {
+    el.addEventListener('click', async () => {
+      const id = el.dataset.id;
+      navigate(PAGES.LOADING);
+      try {
+        await api('POST', `/api/masters/${id}/view`);
+        const master = await api('GET', `/api/masters/${id}`);
+        navigate(PAGES.PROFILE, { viewedMaster: master });
+      } catch (err) {
+        showToast('❌ ' + err.message);
+        navigate(PAGES.RESULTS);
+      }
+    });
+  });
+
+  document.getElementById('leaveNumber')?.addEventListener('click', async () => {
+    if (!userId) { showToast('Telegram orqali kirish kerak'); return; }
+    try {
+      await api('POST', '/api/waiting', {
+        telegram_id: userId,
+        profession: appState.selectedProfession,
+        district: appState.selectedDistrict,
+      });
+      showToast('✅ Raqamingiz qoldirildi! Usta paydo bo\'lganda xabar beramiz.');
+    } catch (err) {
+      showToast('❌ ' + err.message);
+    }
+  });
+}
+
+// --- PROFILE (client views master) ---
+function renderProfile() {
+  const m = appState.viewedMaster;
+  if (!m) return renderLoading();
+  const prof = getProfLabel(m.profession);
+  const dist = getDistrictLabel(m.district);
+
+  const photos = m.photos && m.photos.length > 0
+    ? `<div class="photo-grid">${m.photos.slice(0, 6).map((p, i) => `<div class="photo-cell" data-url="${p}" data-idx="${i}"><img src="${p}" alt="" loading="lazy"></div>`).join('')}</div>`
+    : '<div style="color:#999;font-size:14px;text-align:center;padding:12px">Rasmlar yo\'q</div>';
+
+  const reviews = m.reviews && m.reviews.length > 0
+    ? m.reviews.map(r => `
+      <div class="review-card">
+        <div class="review-stars">${'⭐'.repeat(r.rating)}</div>
+        ${r.comment ? `<div class="review-text">"${r.comment}"</div>` : ''}
+        <div class="review-date">${formatDate(r.created_at)}</div>
+      </div>`).join('')
+    : '<div style="color:#999;font-size:14px">Hali izoh yo\'q</div>';
+
+  return `
+  <div class="page">
+    <div class="page-header">
+      <button class="back-btn" onclick="navigate('${PAGES.RESULTS}')">←</button>
+      <div class="page-title">Usta profili</div>
+    </div>
+    <div class="profile-header card" style="margin:0;border-radius:0">
+      <div class="avatar avatar-lg">${getInitials(m.name)}</div>
+      <div class="name">${m.name}</div>
+      <div class="profession">${prof.emoji} ${prof.label}</div>
+      <div class="profession">${dist.emoji} ${dist.label}</div>
+    </div>
+    <div class="page-content">
+      <div class="stats-row card">
+        <div class="stat-card">
+          <div class="stat-value">${m.rating > 0 ? m.rating : '—'}</div>
+          <div class="stat-label">Reyting</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-value">${m.review_count}</div>
+          <div class="stat-label">Izoh</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-value">${m.photos ? m.photos.length : 0}</div>
+          <div class="stat-label">Rasm</div>
+        </div>
+      </div>
+      <div class="card">
+        <div class="form-label" style="margin-bottom:10px">Ishlar rasmlari</div>
+        ${photos}
+      </div>
+      <div class="card">
+        <div class="form-label" style="margin-bottom:10px">Izohlar</div>
+        ${reviews}
+      </div>
+      <button class="btn-primary" id="contactBtn">📞 Bog'lanish</button>
+      <button class="btn-secondary btn-gap" id="rateBtn">⭐ Baho berish</button>
+    </div>
+  </div>`;
+}
+
+function bindProfile() {
+  const m = appState.viewedMaster;
+  document.getElementById('contactBtn')?.addEventListener('click', async () => {
+    try {
+      const res = await api('POST', `/api/masters/${m.id}/contact`);
+      window.location.href = `tel:${res.phone}`;
+      showToast('📞 ' + res.phone);
+    } catch (err) {
+      showToast('❌ ' + err.message);
+    }
+  });
+
+  document.getElementById('rateBtn')?.addEventListener('click', () => {
+    navigate(PAGES.RATING, { ratingMasterId: m.id, ratingMasterName: m.name });
+  });
+
+  document.querySelectorAll('.photo-cell[data-url]').forEach(el => {
+    el.addEventListener('click', () => showFullscreen(el.dataset.url));
+  });
+}
+
+function showFullscreen(url) {
+  const overlay = document.createElement('div');
+  overlay.className = 'fullscreen-overlay';
+  overlay.innerHTML = `<img src="${url}"><button class="fullscreen-close" onclick="this.parentElement.remove()">✕</button>`;
+  document.body.appendChild(overlay);
+}
+
+// --- MY PROFILE ---
+function renderMyProfile() {
+  if (!masterData) return renderLoading();
+  const prof = getProfLabel(masterData.profession);
+  const dist = getDistrictLabel(masterData.district);
+  return `
+  <div class="page">
+    <div class="page-header">
+      <button class="back-btn" onclick="navigate('${PAGES.MASTER_HOME}')">←</button>
+      <div class="page-title">Mening profilim</div>
+    </div>
+    <div class="profile-header card" style="margin:0;border-radius:0">
+      <div class="avatar avatar-lg">${getInitials(masterData.name)}</div>
+      <div class="name">${masterData.name}</div>
+      <div class="profession">${prof.emoji} ${prof.label}</div>
+      <div class="profession">${dist.emoji} ${dist.label}</div>
+      <div class="profession">📞 ${masterData.phone}</div>
+    </div>
+    <div class="page-content">
+      <button class="btn-primary" onclick="navigate('${PAGES.EDIT_PROFILE}')">✏️ Tahrirlash</button>
+    </div>
+  </div>`;
+}
+
+function bindMyProfile() {}
+
+// --- EDIT PROFILE ---
+function renderEditProfile() {
+  if (!masterData) return renderLoading();
+  return `
+  <div class="page">
+    <div class="page-header">
+      <button class="back-btn" onclick="navigate('${PAGES.MASTER_HOME}')">←</button>
+      <div class="page-title">Profilni tahrirlash</div>
+    </div>
+    <div class="page-content">
+      <div class="form-group">
+        <label class="form-label">Ism</label>
+        <input type="text" id="editName" value="${masterData.name}" maxlength="50">
+      </div>
+      <div class="form-group">
+        <label class="form-label">Kasb</label>
+        <div class="chip-grid" id="editProfGrid">
+          ${PROFESSIONS.map(p => `
+            <div class="chip ${masterData.profession===p.id?'selected':''}" data-prof="${p.id}">
+              ${p.emoji} ${p.label}
+            </div>`).join('')}
+        </div>
+      </div>
+      <div class="form-group">
+        <label class="form-label">Hudud</label>
+        <div class="chip-grid" id="editDistGrid">
+          ${DISTRICTS.map(d => `
+            <div class="chip ${masterData.district===d.id?'selected':''}" data-dist="${d.id}">
+              ${d.emoji} ${d.label}
+            </div>`).join('')}
+        </div>
+      </div>
+      <div class="form-group">
+        <label class="form-label">Telefon</label>
+        <input type="tel" id="editPhone" value="${masterData.phone}">
+      </div>
+      <button class="btn-primary" id="saveEditBtn">💾 Saqlash</button>
+    </div>
+    <nav class="bottom-nav">
+      <button class="nav-btn" onclick="setNav('home')"><span class="nav-icon">🏠</span><span>Bosh</span></button>
+      <button class="nav-btn" onclick="setNav('photos')"><span class="nav-icon">📸</span><span>Rasmlar</span></button>
+      <button class="nav-btn" onclick="setNav('requests')"><span class="nav-icon">🔔</span><span>So'rovlar</span></button>
+      <button class="nav-btn active"><span class="nav-icon">👤</span><span>Profil</span></button>
+    </nav>
+  </div>`;
+}
+
+function bindEditProfile() {
+  let editProf = masterData.profession;
+  let editDist = masterData.district;
+
+  document.querySelectorAll('#editProfGrid .chip').forEach(el => {
+    el.addEventListener('click', () => {
+      editProf = el.dataset.prof;
+      document.querySelectorAll('#editProfGrid .chip').forEach(c => c.classList.remove('selected'));
+      el.classList.add('selected');
+    });
+  });
+
+  document.querySelectorAll('#editDistGrid .chip').forEach(el => {
+    el.addEventListener('click', () => {
+      editDist = el.dataset.dist;
+      document.querySelectorAll('#editDistGrid .chip').forEach(c => c.classList.remove('selected'));
+      el.classList.add('selected');
+    });
+  });
+
+  document.getElementById('saveEditBtn')?.addEventListener('click', async () => {
+    const name = document.getElementById('editName').value.trim();
+    const phone = document.getElementById('editPhone').value.trim();
+    if (name.length < 2) { showToast('Ism kamida 2 belgi'); return; }
+    try {
+      const res = await api('PUT', `/api/masters/${masterData.id}`, { name, phone, profession: editProf, district: editDist });
+      masterData = res.master;
+      showToast('✅ Saqlandi');
+      navigate(PAGES.MASTER_HOME);
+    } catch (err) {
+      showToast('❌ ' + err.message);
+    }
+  });
+}
+
+// --- PHOTOS ---
+function renderPhotos() {
+  if (!masterData) return renderLoading();
+  const photos = masterData.photos || [];
+  const slots = [];
+  for (let i = 0; i < Math.max(photos.length + 1, 3); i++) {
+    if (i < photos.length) {
+      slots.push(`<div class="photo-cell" data-idx="${i}"><img src="${photos[i]}" alt="" loading="lazy"><div style="position:absolute;top:4px;right:4px;background:rgba(0,0,0,0.5);border-radius:50%;width:24px;height:24px;display:flex;align-items:center;justify-content:center;color:white;font-size:14px;cursor:pointer" data-del="${i}">✕</div></div>`);
+    } else if (photos.length < 10) {
+      slots.push(`<div class="photo-cell empty" id="photoAdd">+</div>`);
+      break;
+    }
+  }
+  return `
+  <div class="page">
+    <div class="page-header">
+      <button class="back-btn" onclick="navigate('${PAGES.MASTER_HOME}')">←</button>
+      <div class="page-title">Rasmlarim (${photos.length}/10)</div>
+    </div>
+    <div class="page-content">
+      <div class="photo-grid">${slots.join('')}</div>
+      <input type="file" id="photoFileInput" accept="image/*" style="display:none">
+      <div style="height:16px"></div>
+      ${photos.length < 10 ? '<button class="btn-secondary" id="addNewPhoto">📸 Rasm qo\'shish</button>' : ''}
+    </div>
+    <nav class="bottom-nav">
+      <button class="nav-btn" onclick="setNav('home')"><span class="nav-icon">🏠</span><span>Bosh</span></button>
+      <button class="nav-btn active"><span class="nav-icon">📸</span><span>Rasmlar</span></button>
+      <button class="nav-btn" onclick="setNav('requests')"><span class="nav-icon">🔔</span><span>So'rovlar</span></button>
+      <button class="nav-btn" onclick="setNav('profile')"><span class="nav-icon">👤</span><span>Profil</span></button>
+    </nav>
+  </div>`;
+}
+
+function bindPhotos() {
+  const fileInput = document.getElementById('photoFileInput');
+  const triggerUpload = () => fileInput && fileInput.click();
+
+  document.getElementById('photoAdd')?.addEventListener('click', triggerUpload);
+  document.getElementById('addNewPhoto')?.addEventListener('click', triggerUpload);
+
+  fileInput?.addEventListener('change', async (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+    try {
+      const compressed = await compressImage(file);
+      const res = await api('POST', `/api/masters/${masterData.id}/photos`, { photo_url: compressed });
+      masterData.photos = res.photos;
+      render();
+    } catch (err) {
+      showToast('❌ ' + err.message);
+    }
+  });
+
+  document.querySelectorAll('[data-del]').forEach(el => {
+    el.addEventListener('click', async (e) => {
+      e.stopPropagation();
+      const idx = Number(el.dataset.del);
+      try {
+        const res = await api('DELETE', `/api/masters/${masterData.id}/photos/${idx}`);
+        masterData.photos = res.photos;
+        render();
+        showToast('🗑️ Rasm o\'chirildi');
+      } catch (err) {
+        showToast('❌ ' + err.message);
+      }
+    });
+  });
+
+  document.querySelectorAll('.photo-cell[data-idx]').forEach(el => {
+    el.addEventListener('click', () => {
+      if (el.querySelector('img')) showFullscreen(el.querySelector('img').src);
+    });
+  });
+}
+
+// --- RATING ---
+let selectedRating = 0;
+
+function renderRating() {
+  const name = appState.ratingMasterName || 'Usta';
+  return `
+  <div class="page">
+    <div class="page-header">
+      <button class="back-btn" onclick="navigate('${PAGES.PROFILE}')">←</button>
+      <div class="page-title">Baho berish</div>
+    </div>
+    <div class="page-content">
+      <div class="card" style="text-align:center">
+        <div style="font-weight:600;font-size:16px;margin-bottom:16px">${name}</div>
+        <div class="stars-input" id="starsInput">
+          <span data-star="1">☆</span>
+          <span data-star="2">☆</span>
+          <span data-star="3">☆</span>
+          <span data-star="4">☆</span>
+          <span data-star="5">☆</span>
+        </div>
+        <div style="color:#999;font-size:13px" id="starHint">Yulduzga bosing</div>
+      </div>
+      <div class="form-group">
+        <label class="form-label">Izoh (ixtiyoriy)</label>
+        <textarea id="reviewComment" placeholder="Fikringizni yozing..."></textarea>
+      </div>
+      <button class="btn-primary" id="saveRating">✅ Saqlash</button>
+      <button class="btn-ghost btn-gap" onclick="navigate('${PAGES.PROFILE}')">Bekor qilish</button>
+    </div>
+  </div>`;
+}
+
+function bindRating() {
+  selectedRating = 0;
+  const stars = document.querySelectorAll('#starsInput span');
+  const hint = document.getElementById('starHint');
+  const labels = ['', 'Yomon', "Qoniqarsiz", "O'rtacha", 'Yaxshi', 'A\'lo'];
+
+  stars.forEach((star) => {
+    star.addEventListener('click', () => {
+      selectedRating = Number(star.dataset.star);
+      stars.forEach((s, j) => {
+        s.textContent = j < selectedRating ? '⭐' : '☆';
+      });
+      hint.textContent = labels[selectedRating];
+    });
+  });
+
+  document.getElementById('saveRating')?.addEventListener('click', async () => {
+    if (!selectedRating) { showToast('Yulduz tanlang'); return; }
+    const comment = document.getElementById('reviewComment').value.trim();
+    try {
+      await api('POST', '/api/reviews', {
+        master_id: appState.ratingMasterId,
+        client_telegram_id: userId || 0,
+        rating: selectedRating,
+        comment,
+      });
+      showToast('✅ Bahoyingiz saqlandi!');
+      const master = await api('GET', `/api/masters/${appState.ratingMasterId}`);
+      navigate(PAGES.PROFILE, { viewedMaster: master });
+    } catch (err) {
+      showToast('❌ ' + err.message);
+    }
+  });
+}
+
+// --- NOT FOUND ---
+function renderNotFound() {
+  return `
+  <div class="page">
+    <div class="empty-state" style="margin-top:80px">
+      <div class="empty-icon">😔</div>
+      <div class="empty-title">Sahifa topilmadi</div>
+      <div class="empty-text">Bunday sahifa mavjud emas</div>
+      <div style="height:24px"></div>
+      <button class="btn-primary" onclick="navigate('${PAGES.ONBOARDING}')">🏠 Bosh sahifa</button>
+    </div>
+  </div>`;
+}
+
+function bindNotFound() {}
+
+// === INIT ===
+async function init() {
+  render(); // show loading
+
+  // Dev mode: simulate user
+  const testUserId = userId || 12345;
+
+  try {
+    const user = await api('GET', `/api/user/${testUserId}`);
+    if (user.role === 'master') {
+      masterData = user.data;
+      navigate(PAGES.MASTER_HOME);
+    } else if (user.role === 'client') {
+      navigate(PAGES.CLIENT_HOME);
+    } else {
+      navigate(PAGES.ONBOARDING);
+    }
+  } catch (err) {
+    navigate(PAGES.ONBOARDING);
+  }
+}
+
+// Make navigate global
+window.navigate = navigate;
+
+init();
