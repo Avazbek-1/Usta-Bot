@@ -291,8 +291,8 @@ function renderMasterHome() {
       <button class="nav-btn ${currentNav==='photos'?'active':''}" onclick="setNav('photos')">
         <span class="nav-icon">📸</span><span>Rasmlar</span>
       </button>
-      <button class="nav-btn ${currentNav==='requests'?'active':''}" onclick="setNav('requests')">
-        <span class="nav-icon">🔔</span><span>So'rovlar</span>
+      <button class="nav-btn ${currentNav==='search'?'active':''}" onclick="setNav('search')">
+        <span class="nav-icon">🔍</span><span>Qidirish</span>
       </button>
       <button class="nav-btn ${currentNav==='profile'?'active':''}" onclick="setNav('profile')">
         <span class="nav-icon">👤</span><span>Profil</span>
@@ -311,9 +311,7 @@ window.setNav = function(tab) {
   if (tab === 'home') navigate(PAGES.MASTER_HOME);
   else if (tab === 'photos') navigate(PAGES.PHOTOS);
   else if (tab === 'profile') navigate(PAGES.EDIT_PROFILE);
-  else if (tab === 'requests') {
-    showToast('So\'rovlar tez orada qo\'shiladi 🔔');
-  }
+  else if (tab === 'search') navigate(PAGES.CLIENT_HOME);
 };
 
 // --- REGISTER (3 steps) ---
@@ -528,7 +526,19 @@ window.goBackFromRegister = function() {
 
 // --- CLIENT HOME ---
 function renderClientHome() {
-  const navBtns = `
+  const isMasterBrowsing = masterData !== null;
+
+  const header = isMasterBrowsing
+    ? `<div class="page-header">
+        <button class="back-btn" onclick="navigate('${PAGES.MASTER_HOME}')">←</button>
+        <div class="page-title">Usta qidirish</div>
+       </div>`
+    : `<div style="background:var(--blue);padding:24px 16px 20px">
+        <div style="color:white;font-size:22px;font-weight:800">Farg'ona Usta 🏗️</div>
+        <div style="color:rgba(255,255,255,0.8);font-size:15px;margin-top:4px">Qanday usta kerak?</div>
+       </div>`;
+
+  const navBtns = isMasterBrowsing ? '' : `
   <nav class="bottom-nav">
     <button class="nav-btn ${currentNav==='search'?'active':''}" onclick="setClientNav('search')">
       <span class="nav-icon">🔍</span><span>Qidirish</span>
@@ -537,12 +547,10 @@ function renderClientHome() {
       <span class="nav-icon">⭐</span><span>Baholarim</span>
     </button>
   </nav>`;
+
   return `
   <div class="page">
-    <div style="background:var(--blue);padding:24px 16px 20px">
-      <div style="color:white;font-size:22px;font-weight:800">Farg'ona Usta 🏗️</div>
-      <div style="color:rgba(255,255,255,0.8);font-size:15px;margin-top:4px">Qanday usta kerak?</div>
-    </div>
+    ${header}
     <div class="page-content">
       <div class="chip-grid" id="profSelect">
         ${PROFESSIONS.map(p => `
@@ -836,7 +844,7 @@ function renderEditProfile() {
     <nav class="bottom-nav">
       <button class="nav-btn" onclick="setNav('home')"><span class="nav-icon">🏠</span><span>Bosh</span></button>
       <button class="nav-btn" onclick="setNav('photos')"><span class="nav-icon">📸</span><span>Rasmlar</span></button>
-      <button class="nav-btn" onclick="setNav('requests')"><span class="nav-icon">🔔</span><span>So'rovlar</span></button>
+      <button class="nav-btn" onclick="setNav('search')"><span class="nav-icon">🔍</span><span>Qidirish</span></button>
       <button class="nav-btn active"><span class="nav-icon">👤</span><span>Profil</span></button>
     </nav>
   </div>`;
@@ -907,7 +915,7 @@ function renderPhotos() {
     <nav class="bottom-nav">
       <button class="nav-btn" onclick="setNav('home')"><span class="nav-icon">🏠</span><span>Bosh</span></button>
       <button class="nav-btn active"><span class="nav-icon">📸</span><span>Rasmlar</span></button>
-      <button class="nav-btn" onclick="setNav('requests')"><span class="nav-icon">🔔</span><span>So'rovlar</span></button>
+      <button class="nav-btn" onclick="setNav('search')"><span class="nav-icon">🔍</span><span>Qidirish</span></button>
       <button class="nav-btn" onclick="setNav('profile')"><span class="nav-icon">👤</span><span>Profil</span></button>
     </nav>
   </div>`;
