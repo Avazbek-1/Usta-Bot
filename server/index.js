@@ -2,23 +2,61 @@ import 'dotenv/config';
 import express from 'express';
 import path from 'path';
 import { fileURLToPath } from 'url';
-import { JSONFilePreset } from 'lowdb/node';
 import { bot } from '../bot/index.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const app = express();
 const PORT = process.env.PORT || 3000;
 
-app.use(express.json());
+app.use(express.json({ limit: '10mb' }));
 app.use(express.static(path.join(__dirname, '../webapp')));
 
-const dbPath = process.env.NODE_ENV === 'production' ? '/data/db.json' : path.join(__dirname, '../data/db.json');
-const defaultData = { masters: [], clients: [], reviews: [], waiting_clients: [] };
+// === JSONBIN DB ===
+class JSONBinDB {
+  constructor() {
+    this.data = { masters: [], clients: [], reviews: [], waiting_clients: [] };
+    this.apiKey  = process.env.JSONBIN_API_KEY;
+    this.binId   = process.env.JSONBIN_BIN_ID;
+    this._base   = `https://api.jsonbin.io/v3/b/${this.binId}`;
+  }
+
+  async read() {
+    // in-memory — ma'lumot server start da yuklanadi
+  }
+
+  async write() {
+    if (!this.apiKey || !this.binId) return;
+    const res = await fetch(this._base, {
+      method: 'PUT',
+      headers: {
+        'Content-Type': 'application/json',
+        'X-Master-Key': this.apiKey,
+        'X-Bin-Versioning': 'false',
+      },
+      body: JSON.stringify(this.data),
+    });
+    if (!res.ok) throw new Error('JSONBin xatosi: ' + res.status);
+  }
+}
 
 let db;
 
 async function initDb() {
-  db = await JSONFilePreset(dbPath, defaultData);
+  db = new JSONBinDB();
+  if (db.apiKey && db.binId) {
+    const res = await fetch(`${db._base}/latest`, {
+      headers: { 'X-Master-Key': db.apiKey },
+    });
+    if (res.ok) {
+      const json = await res.json();
+      db.data = json.record;
+      console.log('JSONBin: ma\'lumotlar yuklandi ✅');
+    } else {
+      console.warn('JSONBin: yuklab bo\'lmadi, bo\'sh boshlanadi');
+    }
+  } else {
+    console.log('JSONBIN_* topilmadi — xotirada ishlaydi (ma\'lumot saqlanmaydi)');
+  }
 }
 
 // Health check
