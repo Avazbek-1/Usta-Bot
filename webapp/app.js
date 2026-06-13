@@ -120,6 +120,69 @@ function compressImage(file) {
   });
 }
 
+// === GLOBAL FILE PICKER ===
+let _fileCallback = null;
+
+function openFilePicker(callback) {
+  _fileCallback = callback;
+  const input = document.getElementById('globalFileInput');
+  input.value = '';
+  input.click();
+}
+
+function initFilePicker() {
+  document.getElementById('globalFileInput').addEventListener('change', async (e) => {
+    const file = e.target.files[0];
+    if (!file || !_fileCallback) return;
+    const cb = _fileCallback;
+    _fileCallback = null;
+    showToast('⏳ Rasm siqilmoqda...');
+    const compressed = await compressImage(file);
+    cb(compressed);
+  });
+}
+
+// === PHONE INPUT MASK ===
+function setupPhoneInput(inputId) {
+  const el = document.getElementById(inputId);
+  if (!el) return;
+  if (!el.value || el.value.replace(/\D/g, '').length < 3) el.value = '+998 ';
+
+  el.addEventListener('keydown', (e) => {
+    const pos = el.selectionStart;
+    if ((e.key === 'Backspace' || e.key === 'Delete') && pos <= 5 && el.selectionEnd <= 5) {
+      e.preventDefault();
+    }
+  });
+
+  el.addEventListener('input', () => {
+    const digits = el.value.replace(/\D/g, '');
+    let local = digits.startsWith('998') ? digits.slice(3) : digits;
+    local = local.slice(0, 9);
+    let fmt = '+998 ';
+    if (local.length > 0) fmt += local.slice(0, 2);
+    if (local.length > 2) fmt += '-' + local.slice(2, 5);
+    if (local.length > 5) fmt += '-' + local.slice(5, 7);
+    if (local.length > 7) fmt += '-' + local.slice(7, 9);
+    el.value = fmt;
+  });
+
+  el.addEventListener('focus', () => {
+    if (!el.value.startsWith('+998')) el.value = '+998 ';
+    setTimeout(() => el.setSelectionRange(el.value.length, el.value.length), 0);
+  });
+}
+
+function normalizePhone(formatted) {
+  const d = formatted.replace(/\D/g, '');
+  return '+' + d;
+}
+
+function isPhoneValid(formatted) {
+  const d = formatted.replace(/\D/g, '');
+  return d.length === 12 && d.startsWith('998');
+}
+
 // === TOAST ===
 function showToast(msg, duration = 2500) {
   let t = document.querySelector('.toast');
@@ -320,7 +383,7 @@ function renderRegStep2(dots) {
       </div>
       <div class="form-group">
         <label class="form-label">Telefon raqam</label>
-        <input type="tel" id="regPhone" placeholder="+998901234567" value="${regData.phone}">
+        <input type="tel" id="regPhone" placeholder="+998 99-123-45-67" value="${regData.phone || '+998 '}" inputmode="numeric">
         <div class="form-error" id="phoneErr"></div>
       </div>
       <button class="btn-primary" id="step2Next">Davom etish →</button>
@@ -351,7 +414,6 @@ function renderRegStep3(dots) {
       <div class="form-group">
         <label class="form-label">Ishlaringiz rasmlari (ixtiyoriy)</label>
         <div class="photo-grid">${photoSlots.join('')}</div>
-        <input type="file" id="photoInput" accept="image/*" style="display:none">
       </div>
       <button class="btn-primary" id="finishReg">✅ Ro'yxatdan o'tish</button>
       <button class="btn-ghost btn-gap" id="skipPhotos">O'tkazib yuborish</button>
@@ -382,6 +444,7 @@ function bindRegister() {
       if (ok) { regStep = 2; render(); }
     });
   } else if (regStep === 2) {
+    setupPhoneInput('regPhone');
     document.querySelectorAll('#distGrid .chip').forEach(el => {
       el.addEventListener('click', () => {
         regData.district = el.dataset.dist;
@@ -390,25 +453,30 @@ function bindRegister() {
       });
     });
     document.getElementById('step2Next')?.addEventListener('click', () => {
-      regData.phone = document.getElementById('regPhone').value.trim();
+      const rawPhone = document.getElementById('regPhone').value;
+      regData.phone = normalizePhone(rawPhone);
       let ok = true;
       if (!regData.district) {
         document.getElementById('distErr').textContent = 'Hududni tanlang';
         ok = false;
       } else document.getElementById('distErr').textContent = '';
-      if (!regData.phone.match(/^\+998\d{9}$/)) {
-        document.getElementById('phoneErr').textContent = 'Telefon: +998XXXXXXXXX format';
+      if (!isPhoneValid(rawPhone)) {
+        document.getElementById('phoneErr').textContent = 'To\'liq raqam kiriting: +998 99-123-45-67';
         ok = false;
       } else document.getElementById('phoneErr').textContent = '';
       if (ok) { regStep = 3; render(); }
     });
   } else {
-    document.getElementById('photoInput')?.addEventListener('change', handlePhotoUpload);
-    for (let i = 0; i < 3; i++) {
-      document.getElementById('addPhoto' + i)?.addEventListener('click', () => {
-        document.getElementById('photoInput').click();
+    document.querySelectorAll('.photo-cell.empty').forEach(el => {
+      el.addEventListener('click', () => {
+        openFilePicker((compressed) => {
+          if (regData.photos.length < 10) {
+            regData.photos.push(compressed);
+            render();
+          }
+        });
       });
-    }
+    });
     document.getElementById('finishReg')?.addEventListener('click', submitRegister);
     document.getElementById('skipPhotos')?.addEventListener('click', submitRegister);
   }
@@ -761,7 +829,7 @@ function renderEditProfile() {
       </div>
       <div class="form-group">
         <label class="form-label">Telefon</label>
-        <input type="tel" id="editPhone" value="${masterData.phone}">
+        <input type="tel" id="editPhone" value="${masterData.phone}" inputmode="numeric">
       </div>
       <button class="btn-primary" id="saveEditBtn">💾 Saqlash</button>
     </div>
@@ -775,6 +843,7 @@ function renderEditProfile() {
 }
 
 function bindEditProfile() {
+  setupPhoneInput('editPhone');
   let editProf = masterData.profession;
   let editDist = masterData.district;
 
@@ -796,8 +865,10 @@ function bindEditProfile() {
 
   document.getElementById('saveEditBtn')?.addEventListener('click', async () => {
     const name = document.getElementById('editName').value.trim();
-    const phone = document.getElementById('editPhone').value.trim();
+    const rawPhone = document.getElementById('editPhone').value;
+    const phone = normalizePhone(rawPhone);
     if (name.length < 2) { showToast('Ism kamida 2 belgi'); return; }
+    if (!isPhoneValid(rawPhone)) { showToast('To\'liq raqam kiriting'); return; }
     try {
       const res = await api('PUT', `/api/masters/${masterData.id}`, { name, phone, profession: editProf, district: editDist });
       masterData = res.master;
@@ -830,7 +901,6 @@ function renderPhotos() {
     </div>
     <div class="page-content">
       <div class="photo-grid">${slots.join('')}</div>
-      <input type="file" id="photoFileInput" accept="image/*" style="display:none">
       <div style="height:16px"></div>
       ${photos.length < 10 ? '<button class="btn-secondary" id="addNewPhoto">📸 Rasm qo\'shish</button>' : ''}
     </div>
@@ -844,24 +914,21 @@ function renderPhotos() {
 }
 
 function bindPhotos() {
-  const fileInput = document.getElementById('photoFileInput');
-  const triggerUpload = () => fileInput && fileInput.click();
+  const uploadPhoto = () => {
+    openFilePicker(async (compressed) => {
+      try {
+        const res = await api('POST', `/api/masters/${masterData.id}/photos`, { photo_url: compressed });
+        masterData.photos = res.photos;
+        render();
+        showToast('✅ Rasm qo\'shildi');
+      } catch (err) {
+        showToast('❌ ' + err.message);
+      }
+    });
+  };
 
-  document.getElementById('photoAdd')?.addEventListener('click', triggerUpload);
-  document.getElementById('addNewPhoto')?.addEventListener('click', triggerUpload);
-
-  fileInput?.addEventListener('change', async (e) => {
-    const file = e.target.files[0];
-    if (!file) return;
-    try {
-      const compressed = await compressImage(file);
-      const res = await api('POST', `/api/masters/${masterData.id}/photos`, { photo_url: compressed });
-      masterData.photos = res.photos;
-      render();
-    } catch (err) {
-      showToast('❌ ' + err.message);
-    }
-  });
+  document.getElementById('photoAdd')?.addEventListener('click', uploadPhoto);
+  document.getElementById('addNewPhoto')?.addEventListener('click', uploadPhoto);
 
   document.querySelectorAll('[data-del]').forEach(el => {
     el.addEventListener('click', async (e) => {
@@ -994,4 +1061,5 @@ async function init() {
 // Make navigate global
 window.navigate = navigate;
 
+initFilePicker();
 init();
