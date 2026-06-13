@@ -1040,11 +1040,14 @@ function bindNotFound() {}
 async function init() {
   render(); // show loading
 
-  // Dev mode: simulate user
-  const testUserId = userId || 12345;
+  if (!userId) {
+    // Telegram dan tashqarida ochilgan (test uchun)
+    navigate(PAGES.ONBOARDING);
+    return;
+  }
 
   try {
-    const user = await api('GET', `/api/user/${testUserId}`);
+    const user = await api('GET', `/api/user/${userId}`);
     if (user.role === 'master') {
       masterData = user.data;
       navigate(PAGES.MASTER_HOME);

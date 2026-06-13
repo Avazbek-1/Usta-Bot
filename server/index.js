@@ -273,25 +273,41 @@ async function start() {
 
   const hasToken = process.env.BOT_TOKEN && process.env.BOT_TOKEN !== 'YOUR_BOT_TOKEN_HERE';
 
+  // Webhook route ni LISTEN DAN OLDIN ro'yxatdan o'tkazamiz
   if (hasToken && process.env.NODE_ENV === 'production') {
-    // Webhook rejimi — Render uchun to'g'ri yol
-    const webhookUrl = `${process.env.WEBAPP_URL}/webhook`;
-    await bot.api.setWebhook(webhookUrl);
     app.post('/webhook', webhookCallback(bot, 'express'));
-    console.log('Bot webhook rejimida ishlamoqda:', webhookUrl);
   }
 
-  app.listen(PORT, () => {
-    console.log(`Server ishlamoqda: http://localhost:${PORT}`);
+  // Server ishga tushadi
+  await new Promise(resolve => {
+    app.listen(PORT, () => {
+      console.log(`Server ishlamoqda: http://localhost:${PORT}`);
+      resolve();
+    });
   });
 
-  if (hasToken && process.env.NODE_ENV !== 'production') {
-    // Long polling — local development uchun
-    bot.start();
-    console.log('Bot long polling rejimida ishlamoqda...');
-  }
+  if (hasToken && process.env.NODE_ENV === 'production') {
+    try {
+      const webhookUrl = `${process.env.WEBAPP_URL}/webhook`;
+      await bot.api.setWebhook(webhookUrl);
+      console.log('Webhook o\'rnatildi:', webhookUrl);
 
-  if (!hasToken) {
+      // Chap tomonda "Ilovani ochish" tugmasi
+      await bot.api.setChatMenuButton({
+        menu_button: {
+          type: 'web_app',
+          text: 'Ilovani ochish',
+          web_app: { url: process.env.WEBAPP_URL },
+        },
+      });
+      console.log('Bot tayyor ✅');
+    } catch (e) {
+      console.error('Bot sozlash xatosi:', e.message);
+    }
+  } else if (hasToken) {
+    bot.start();
+    console.log('Bot long polling rejimida (local)...');
+  } else {
     console.log('BOT_TOKEN topilmadi — faqat server ishlamoqda');
   }
 }
