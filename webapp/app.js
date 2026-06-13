@@ -275,7 +275,11 @@ function renderOnboarding() {
 
 async function handleOnboarding(role) {
   if (role === 'master') {
-    navigate(PAGES.REGISTER);
+    if (masterData) {
+      navigate(PAGES.MASTER_HOME);
+    } else {
+      navigate(PAGES.REGISTER);
+    }
   } else {
     if (userId) {
       try {
@@ -795,8 +799,7 @@ function bindProfile() {
   document.getElementById('contactBtn')?.addEventListener('click', async () => {
     try {
       const res = await api('POST', `/api/masters/${m.id}/contact`);
-      window.location.href = `tel:${res.phone}`;
-      showToast('📞 ' + res.phone);
+      showContactModal(res.phone, m.telegram_id);
     } catch (err) {
       showToast('❌ ' + err.message);
     }
@@ -809,6 +812,25 @@ function bindProfile() {
   document.querySelectorAll('.photo-cell[data-url]').forEach(el => {
     el.addEventListener('click', () => showFullscreen(el.dataset.url));
   });
+}
+
+function showContactModal(phone, telegramId) {
+  const overlay = document.createElement('div');
+  overlay.className = 'fullscreen-overlay';
+  overlay.style.cssText = 'display:flex;flex-direction:column;justify-content:flex-end;background:rgba(0,0,0,0.55)';
+  overlay.innerHTML = `
+    <div style="background:#fff;border-radius:20px 20px 0 0;padding:24px 16px 32px;display:flex;flex-direction:column;gap:12px">
+      <div style="font-weight:700;font-size:17px;text-align:center;margin-bottom:4px">Usta bilan bog'lanish</div>
+      <a href="tel:${phone}" style="display:block;text-align:center;text-decoration:none;background:var(--blue);color:#fff;padding:14px;border-radius:12px;font-weight:600;font-size:15px" onclick="this.closest('.fullscreen-overlay').remove()">
+        📞 Qo'ng'iroq qilish
+      </a>
+      <a href="tg://user?id=${telegramId}" style="display:block;text-align:center;text-decoration:none;background:#f0f2f5;color:#222;padding:14px;border-radius:12px;font-weight:600;font-size:15px;margin-top:0" onclick="this.closest('.fullscreen-overlay').remove()">
+        ✈️ Telegram orqali yozish
+      </a>
+      <button style="background:none;border:none;color:var(--text-secondary);font-size:15px;padding:10px;cursor:pointer" onclick="this.closest('.fullscreen-overlay').remove()">Bekor qilish</button>
+    </div>`;
+  overlay.addEventListener('click', (e) => { if (e.target === overlay) overlay.remove(); });
+  document.body.appendChild(overlay);
 }
 
 function showFullscreen(url) {
