@@ -26,17 +26,21 @@ class JSONBinDB {
   }
 
   async write() {
-    if (!this.apiKey || !this.binId) return;
-    const res = await fetch(this._base, {
-      method: 'PUT',
-      headers: {
-        'Content-Type': 'application/json',
-        'X-Master-Key': this.apiKey,
-        'X-Bin-Versioning': 'false',
-      },
-      body: JSON.stringify(this.data),
-    });
-    if (!res.ok) throw new Error('JSONBin xatosi: ' + res.status);
+    if (!this.apiKey || !this.binId || this.apiKey.startsWith('YOUR_')) return;
+    try {
+      const res = await fetch(this._base, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+          'X-Master-Key': this.apiKey,
+          'X-Bin-Versioning': 'false',
+        },
+        body: JSON.stringify(this.data),
+      });
+      if (!res.ok) console.error('JSONBin write error:', res.status);
+    } catch (e) {
+      console.error('JSONBin write failed:', e.message);
+    }
   }
 }
 
@@ -44,19 +48,24 @@ let db;
 
 async function initDb() {
   db = new JSONBinDB();
-  if (db.apiKey && db.binId) {
-    const res = await fetch(`${db._base}/latest`, {
-      headers: { 'X-Master-Key': db.apiKey },
-    });
-    if (res.ok) {
-      const json = await res.json();
-      db.data = json.record;
-      console.log('JSONBin: ma\'lumotlar yuklandi ✅');
-    } else {
-      console.warn('JSONBin: yuklab bo\'lmadi, bo\'sh boshlanadi');
+  const configured = db.apiKey && db.binId && !db.apiKey.startsWith('YOUR_');
+  if (configured) {
+    try {
+      const res = await fetch(`${db._base}/latest`, {
+        headers: { 'X-Master-Key': db.apiKey },
+      });
+      if (res.ok) {
+        const json = await res.json();
+        db.data = json.record;
+        console.log('JSONBin: ma\'lumotlar yuklandi ✅');
+      } else {
+        console.warn('JSONBin: yuklab bo\'lmadi, bo\'sh boshlanadi');
+      }
+    } catch (e) {
+      console.error('JSONBin ulanish xatosi:', e.message);
     }
   } else {
-    console.log('JSONBIN_* topilmadi — xotirada ishlaydi (ma\'lumot saqlanmaydi)');
+    console.log('JSONBIN sozlanmagan — xotirada ishlaydi');
   }
 }
 
@@ -77,8 +86,9 @@ app.get('/api/user/:telegram_id', async (req, res) => {
 // POST /api/masters
 app.post('/api/masters', async (req, res) => {
   await db.read();
-  const { telegram_id, name, phone, profession, district, photos } = req.body;
-  if (!telegram_id || !name || !phone || !profession || !district) {
+  const { telegram_id, name, phone, professions, profession, district, photos } = req.body;
+  const profs = professions || (profession ? [profession] : []);
+  if (!telegram_id || !name || !phone || profs.length === 0 || !district) {
     return res.status(400).json({ error: 'Majburiy maydonlar to\'ldirilmagan' });
   }
   const existing = db.data.masters.find(m => m.telegram_id === telegram_id);
@@ -89,7 +99,7 @@ app.post('/api/masters', async (req, res) => {
     telegram_id,
     name,
     phone,
-    profession,
+    professions: profs,
     district,
     photos: photos || [],
     rating: 0,
@@ -111,7 +121,7 @@ app.post('/api/masters', async (req, res) => {
   // Admin ga xabar
   try {
     if (process.env.ADMIN_ID) {
-      await bot.api.sendMessage(process.env.ADMIN_ID, `🆕 Yangi usta: ${name}\nKasb: ${profession}\nHudud: ${district}\nTelefon: ${phone}`);
+      await bot.api.sendMessage(process.env.ADMIN_ID, `🆕 Yangi usta: ${name}\nKasb: ${profs.join(', ')}\nHudud: ${district}\nTelefon: ${phone}`);
     }
   } catch (_) {}
 
@@ -123,7 +133,10 @@ app.get('/api/masters/search', async (req, res) => {
   await db.read();
   const { profession, district } = req.query;
   let results = db.data.masters.filter(m => m.is_active);
-  if (profession) results = results.filter(m => m.profession === profession);
+  if (profession) results = results.filter(m => {
+    const profs = m.professions || (m.profession ? [m.profession] : []);
+    return profs.includes(profession);
+  });
   if (district) results = results.filter(m => m.district === district);
   results.sort((a, b) => b.rating - a.rating);
   res.json(results);
@@ -224,10 +237,11 @@ app.put('/api/masters/:id', async (req, res) => {
   await db.read();
   const master = db.data.masters.find(m => m.id === Number(req.params.id));
   if (!master) return res.status(404).json({ error: 'Usta topilmadi' });
-  const { name, phone, profession, district } = req.body;
+  const { name, phone, professions, profession, district } = req.body;
   if (name) master.name = name;
   if (phone) master.phone = phone;
-  if (profession) master.profession = profession;
+  if (professions && professions.length > 0) master.professions = professions;
+  else if (profession) master.professions = [profession];
   if (district) master.district = district;
   await db.write();
   res.json({ ok: true, master });

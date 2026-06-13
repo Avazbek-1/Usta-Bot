@@ -205,6 +205,15 @@ function getProfLabel(id) {
   return PROFESSIONS.find(p => p.id === id) || { emoji: '🛠️', label: id };
 }
 
+function getProfLabels(master) {
+  const arr = master.professions || (master.profession ? [master.profession] : []);
+  return arr.map(id => getProfLabel(id));
+}
+
+function renderProfBadges(master) {
+  return getProfLabels(master).map(p => `${p.emoji} ${p.label}`).join(' · ');
+}
+
 function getDistrictLabel(id) {
   return DISTRICTS.find(d => d.id === id) || { emoji: '📍', label: id };
 }
@@ -256,7 +265,6 @@ window.handleOnboarding = handleOnboarding;
 // --- MASTER HOME ---
 function renderMasterHome() {
   if (!masterData) return renderLoading();
-  const prof = getProfLabel(masterData.profession);
   const dist = getDistrictLabel(masterData.district);
   const initials = getInitials(masterData.name);
   return `
@@ -264,7 +272,8 @@ function renderMasterHome() {
     <div class="profile-header card" style="margin:0;border-radius:0">
       <div class="avatar avatar-lg">${initials}</div>
       <div class="name">${masterData.name}</div>
-      <div class="profession">${prof.emoji} ${prof.label} · ${dist.emoji} ${dist.label}</div>
+      <div class="profession">${renderProfBadges(masterData)}</div>
+      <div class="profession">${dist.emoji} ${dist.label}</div>
     </div>
     <div class="page-content">
       <div class="stats-row card">
@@ -316,7 +325,7 @@ window.setNav = function(tab) {
 
 // --- REGISTER (3 steps) ---
 let regStep = 1;
-let regData = { name: '', profession: '', district: '', phone: '', photos: [] };
+let regData = { name: '', professions: [], district: '', phone: '', photos: [] };
 
 function renderRegister() {
   const dots = [1,2,3].map(i => `<div class="dot ${i < regStep ? 'done' : i === regStep ? 'active' : ''}"></div>`).join('');
@@ -344,9 +353,10 @@ function renderRegStep1(dots) {
       </div>
       <div class="form-group">
         <label class="form-label">Kasbingiz</label>
+        <div style="font-size:13px;color:var(--text-secondary);margin-bottom:8px">Bir yoki bir necha kasb tanlang</div>
         <div class="chip-grid" id="profGrid">
           ${PROFESSIONS.map(p => `
-            <div class="chip ${regData.profession===p.id?'selected':''}" data-prof="${p.id}">
+            <div class="chip ${regData.professions.includes(p.id)?'selected':''}" data-prof="${p.id}">
               ${p.emoji} ${p.label}
             </div>`).join('')}
         </div>
@@ -423,9 +433,14 @@ function bindRegister() {
   if (regStep === 1) {
     document.querySelectorAll('#profGrid .chip').forEach(el => {
       el.addEventListener('click', () => {
-        regData.profession = el.dataset.prof;
-        document.querySelectorAll('#profGrid .chip').forEach(c => c.classList.remove('selected'));
-        el.classList.add('selected');
+        const id = el.dataset.prof;
+        if (regData.professions.includes(id)) {
+          regData.professions = regData.professions.filter(p => p !== id);
+          el.classList.remove('selected');
+        } else {
+          regData.professions.push(id);
+          el.classList.add('selected');
+        }
       });
     });
     document.getElementById('step1Next')?.addEventListener('click', () => {
@@ -435,8 +450,8 @@ function bindRegister() {
         document.getElementById('nameErr').textContent = 'Ism kamida 2 belgi bo\'lsin';
         ok = false;
       } else document.getElementById('nameErr').textContent = '';
-      if (!regData.profession) {
-        document.getElementById('profErr').textContent = 'Kasbni tanlang';
+      if (regData.professions.length === 0) {
+        document.getElementById('profErr').textContent = 'Kamida bitta kasb tanlang';
         ok = false;
       } else document.getElementById('profErr').textContent = '';
       if (ok) { regStep = 2; render(); }
@@ -498,14 +513,14 @@ async function submitRegister() {
       telegram_id: userId || Date.now(),
       name: regData.name,
       phone: regData.phone,
-      profession: regData.profession,
+      professions: regData.professions,
       district: regData.district,
       photos: regData.photos,
     };
     const res = await api('POST', '/api/masters', payload);
     masterData = res.master;
     regStep = 1;
-    regData = { name: '', profession: '', district: '', phone: '', photos: [] };
+    regData = { name: '', professions: [], district: '', phone: '', photos: [] };
     showToast('✅ Muvaffaqiyatli ro\'yxatdan o\'tdingiz!');
     navigate(PAGES.MASTER_HOME);
   } catch (err) {
@@ -520,7 +535,7 @@ window.regBack = function() {
 
 window.goBackFromRegister = function() {
   regStep = 1;
-  regData = { name: '', profession: '', district: '', phone: '', photos: [] };
+  regData = { name: '', professions: [], district: '', phone: '', photos: [] };
   navigate(PAGES.ONBOARDING);
 };
 
@@ -692,7 +707,6 @@ function bindResults() {
 function renderProfile() {
   const m = appState.viewedMaster;
   if (!m) return renderLoading();
-  const prof = getProfLabel(m.profession);
   const dist = getDistrictLabel(m.district);
 
   const photos = m.photos && m.photos.length > 0
@@ -717,7 +731,7 @@ function renderProfile() {
     <div class="profile-header card" style="margin:0;border-radius:0">
       <div class="avatar avatar-lg">${getInitials(m.name)}</div>
       <div class="name">${m.name}</div>
-      <div class="profession">${prof.emoji} ${prof.label}</div>
+      <div class="profession">${renderProfBadges(m)}</div>
       <div class="profession">${dist.emoji} ${dist.label}</div>
     </div>
     <div class="page-content">
@@ -780,7 +794,6 @@ function showFullscreen(url) {
 // --- MY PROFILE ---
 function renderMyProfile() {
   if (!masterData) return renderLoading();
-  const prof = getProfLabel(masterData.profession);
   const dist = getDistrictLabel(masterData.district);
   return `
   <div class="page">
@@ -791,7 +804,7 @@ function renderMyProfile() {
     <div class="profile-header card" style="margin:0;border-radius:0">
       <div class="avatar avatar-lg">${getInitials(masterData.name)}</div>
       <div class="name">${masterData.name}</div>
-      <div class="profession">${prof.emoji} ${prof.label}</div>
+      <div class="profession">${renderProfBadges(masterData)}</div>
       <div class="profession">${dist.emoji} ${dist.label}</div>
       <div class="profession">📞 ${masterData.phone}</div>
     </div>
@@ -818,10 +831,10 @@ function renderEditProfile() {
         <input type="text" id="editName" value="${masterData.name}" maxlength="50">
       </div>
       <div class="form-group">
-        <label class="form-label">Kasb</label>
+        <label class="form-label">Kasb (bir nechtasini tanlash mumkin)</label>
         <div class="chip-grid" id="editProfGrid">
           ${PROFESSIONS.map(p => `
-            <div class="chip ${masterData.profession===p.id?'selected':''}" data-prof="${p.id}">
+            <div class="chip ${getProfLabels(masterData).map(x=>x.id||p.id).includes(p.id) || (masterData.professions||[masterData.profession]).includes(p.id) ?'selected':''}" data-prof="${p.id}">
               ${p.emoji} ${p.label}
             </div>`).join('')}
         </div>
@@ -852,14 +865,19 @@ function renderEditProfile() {
 
 function bindEditProfile() {
   setupPhoneInput('editPhone');
-  let editProf = masterData.profession;
+  let editProfs = [...(masterData.professions || (masterData.profession ? [masterData.profession] : []))];
   let editDist = masterData.district;
 
   document.querySelectorAll('#editProfGrid .chip').forEach(el => {
     el.addEventListener('click', () => {
-      editProf = el.dataset.prof;
-      document.querySelectorAll('#editProfGrid .chip').forEach(c => c.classList.remove('selected'));
-      el.classList.add('selected');
+      const id = el.dataset.prof;
+      if (editProfs.includes(id)) {
+        editProfs = editProfs.filter(p => p !== id);
+        el.classList.remove('selected');
+      } else {
+        editProfs.push(id);
+        el.classList.add('selected');
+      }
     });
   });
 
@@ -876,9 +894,10 @@ function bindEditProfile() {
     const rawPhone = document.getElementById('editPhone').value;
     const phone = normalizePhone(rawPhone);
     if (name.length < 2) { showToast('Ism kamida 2 belgi'); return; }
+    if (editProfs.length === 0) { showToast('Kamida bitta kasb tanlang'); return; }
     if (!isPhoneValid(rawPhone)) { showToast('To\'liq raqam kiriting'); return; }
     try {
-      const res = await api('PUT', `/api/masters/${masterData.id}`, { name, phone, profession: editProf, district: editDist });
+      const res = await api('PUT', `/api/masters/${masterData.id}`, { name, phone, professions: editProfs, district: editDist });
       masterData = res.master;
       showToast('✅ Saqlandi');
       navigate(PAGES.MASTER_HOME);
