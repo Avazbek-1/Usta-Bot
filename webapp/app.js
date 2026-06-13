@@ -317,6 +317,7 @@ function renderMasterHome() {
       </div>
       <button class="btn-primary" id="addPhotoBtn">📸 Rasm qo'shish</button>
       <button class="btn-secondary btn-gap" id="editProfileBtn">✏️ Profilni tahrirlash</button>
+      <button class="btn-ghost btn-gap" onclick="navigate('${PAGES.ONBOARDING}')">↩ Rolni o'zgartirish</button>
     </div>
     <nav class="bottom-nav">
       <button class="nav-btn ${currentNav==='home'?'active':''}" onclick="setNav('home')">
@@ -325,8 +326,8 @@ function renderMasterHome() {
       <button class="nav-btn ${currentNav==='photos'?'active':''}" onclick="setNav('photos')">
         <span class="nav-icon">📸</span><span>Rasmlar</span>
       </button>
-      <button class="nav-btn ${currentNav==='search'?'active':''}" onclick="setNav('search')">
-        <span class="nav-icon">🔍</span><span>Qidirish</span>
+      <button class="nav-btn ${currentNav==='orders'?'active':''}" onclick="setNav('orders')">
+        <span class="nav-icon">📋</span><span>Buyurtmalar</span>
       </button>
       <button class="nav-btn ${currentNav==='profile'?'active':''}" onclick="setNav('profile')">
         <span class="nav-icon">👤</span><span>Profil</span>
@@ -345,7 +346,7 @@ window.setNav = function(tab) {
   if (tab === 'home') navigate(PAGES.MASTER_HOME);
   else if (tab === 'photos') navigate(PAGES.PHOTOS);
   else if (tab === 'profile') navigate(PAGES.EDIT_PROFILE);
-  else if (tab === 'search') navigate(PAGES.CLIENT_HOME);
+  else if (tab === 'orders') showToast('Buyurtmalar tez orada 📋');
 };
 
 // --- REGISTER (3 steps) ---
@@ -596,6 +597,7 @@ function renderClientHome() {
         ${PROFESSIONS.map(p => `
           <div class="chip" data-prof="${p.id}">${p.emoji} ${p.label}</div>`).join('')}
       </div>
+      ${!isMasterBrowsing ? `<button class="btn-ghost btn-gap" onclick="navigate('${PAGES.ONBOARDING}')">↩ Rolni o'zgartirish</button>` : ''}
     </div>
     ${navBtns}
   </div>`;
@@ -882,7 +884,7 @@ function renderEditProfile() {
     <nav class="bottom-nav">
       <button class="nav-btn" onclick="setNav('home')"><span class="nav-icon">🏠</span><span>Bosh</span></button>
       <button class="nav-btn" onclick="setNav('photos')"><span class="nav-icon">📸</span><span>Rasmlar</span></button>
-      <button class="nav-btn" onclick="setNav('search')"><span class="nav-icon">🔍</span><span>Qidirish</span></button>
+      <button class="nav-btn" onclick="setNav('orders')"><span class="nav-icon">📋</span><span>Buyurtmalar</span></button>
       <button class="nav-btn active"><span class="nav-icon">👤</span><span>Profil</span></button>
     </nav>
   </div>`;
@@ -959,7 +961,7 @@ function renderPhotos() {
     <nav class="bottom-nav">
       <button class="nav-btn" onclick="setNav('home')"><span class="nav-icon">🏠</span><span>Bosh</span></button>
       <button class="nav-btn active"><span class="nav-icon">📸</span><span>Rasmlar</span></button>
-      <button class="nav-btn" onclick="setNav('search')"><span class="nav-icon">🔍</span><span>Qidirish</span></button>
+      <button class="nav-btn" onclick="setNav('orders')"><span class="nav-icon">📋</span><span>Buyurtmalar</span></button>
       <button class="nav-btn" onclick="setNav('profile')"><span class="nav-icon">👤</span><span>Profil</span></button>
     </nav>
   </div>`;
