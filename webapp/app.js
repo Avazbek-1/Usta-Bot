@@ -119,13 +119,22 @@ function render() {
 }
 
 // === API ===
-async function api(method, path, body) {
-  const opts = { method, headers: { 'Content-Type': 'application/json' } };
+async function api(method, path, body, timeoutMs = 10000) {
+  const ctrl = new AbortController();
+  const timer = setTimeout(() => ctrl.abort(), timeoutMs);
+  const opts = { method, headers: { 'Content-Type': 'application/json' }, signal: ctrl.signal };
   if (body) opts.body = JSON.stringify(body);
-  const res = await fetch(path, opts);
-  const data = await res.json();
-  if (!res.ok) throw new Error(data.error || 'Server xatosi');
-  return data;
+  try {
+    const res = await fetch(path, opts);
+    clearTimeout(timer);
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error || 'Server xatosi');
+    return data;
+  } catch (err) {
+    clearTimeout(timer);
+    if (err.name === 'AbortError') throw new Error('So\'rov vaqti tugadi (10s)');
+    throw err;
+  }
 }
 
 // === HTML ESCAPE (XSS prevention) ===
@@ -249,7 +258,7 @@ function showToast(msg, duration = 2500) {
 
 // === HELPERS ===
 function getInitials(name) {
-  return name.split(' ').map(w => w[0]).join('').toUpperCase().slice(0, 2);
+  return String(name || '?').split(' ').filter(Boolean).map(w => w[0]).join('').toUpperCase().slice(0, 2) || '?';
 }
 
 function getProfLabel(id) {
@@ -281,7 +290,9 @@ function renderStars(rating, count) {
 }
 
 function formatDate(iso) {
-  return new Date(iso).toLocaleDateString('uz-UZ');
+  if (!iso) return '';
+  const d = new Date(iso);
+  return isNaN(d.getTime()) ? '' : d.toLocaleDateString('uz-UZ');
 }
 
 // === PAGES ===
@@ -827,11 +838,15 @@ function renderProfile() {
 
 function bindProfile() {
   const m = appState.viewedMaster;
-  document.getElementById('contactBtn')?.addEventListener('click', async () => {
+  document.getElementById('contactBtn')?.addEventListener('click', async (e) => {
+    const btn = e.currentTarget;
+    btn.disabled = true;
     try {
       const res = await api('POST', `/api/masters/${m.id}/contact`);
+      btn.disabled = false;
       showContactModal(res.phone, m.telegram_id);
     } catch (err) {
+      btn.disabled = false;
       showToast('❌ ' + err.message);
     }
   });
@@ -849,17 +864,36 @@ function showContactModal(phone, telegramId) {
   const overlay = document.createElement('div');
   overlay.className = 'fullscreen-overlay';
   overlay.style.cssText = 'display:flex;flex-direction:column;justify-content:flex-end;background:rgba(0,0,0,0.55)';
-  overlay.innerHTML = `
-    <div style="background:#fff;border-radius:20px 20px 0 0;padding:24px 16px 32px;display:flex;flex-direction:column;gap:12px">
-      <div style="font-weight:700;font-size:17px;text-align:center;margin-bottom:4px">Usta bilan bog'lanish</div>
-      <a href="tel:${phone}" style="display:block;text-align:center;text-decoration:none;background:var(--blue);color:#fff;padding:14px;border-radius:12px;font-weight:600;font-size:15px" onclick="this.closest('.fullscreen-overlay').remove()">
-        📞 Qo'ng'iroq qilish
-      </a>
-      <a href="tg://user?id=${telegramId}" style="display:block;text-align:center;text-decoration:none;background:#f0f2f5;color:#222;padding:14px;border-radius:12px;font-weight:600;font-size:15px;margin-top:0" onclick="this.closest('.fullscreen-overlay').remove()">
-        ✈️ Telegram orqali yozish
-      </a>
-      <button style="background:none;border:none;color:var(--text-secondary);font-size:15px;padding:10px;cursor:pointer" onclick="this.closest('.fullscreen-overlay').remove()">Bekor qilish</button>
-    </div>`;
+
+  const sheet = document.createElement('div');
+  sheet.style.cssText = 'background:#fff;border-radius:20px 20px 0 0;padding:24px 16px 32px;display:flex;flex-direction:column;gap:12px';
+
+  const title = document.createElement('div');
+  title.style.cssText = 'font-weight:700;font-size:17px;text-align:center;margin-bottom:4px';
+  title.textContent = "Usta bilan bog'lanish";
+
+  const callLink = document.createElement('a');
+  callLink.href = `tel:${phone}`;
+  callLink.style.cssText = 'display:block;text-align:center;text-decoration:none;background:var(--blue);color:#fff;padding:14px;border-radius:12px;font-weight:600;font-size:15px';
+  callLink.textContent = '📞 Qo\'ng\'iroq qilish';
+  callLink.addEventListener('click', () => overlay.remove());
+
+  const tgLink = document.createElement('a');
+  tgLink.href = `tg://user?id=${telegramId}`;
+  tgLink.style.cssText = 'display:block;text-align:center;text-decoration:none;background:#f0f2f5;color:#222;padding:14px;border-radius:12px;font-weight:600;font-size:15px';
+  tgLink.textContent = '✈️ Telegram orqali yozish';
+  tgLink.addEventListener('click', () => overlay.remove());
+
+  const cancelBtn = document.createElement('button');
+  cancelBtn.style.cssText = 'background:none;border:none;color:var(--text-secondary);font-size:15px;padding:10px;cursor:pointer';
+  cancelBtn.textContent = 'Bekor qilish';
+  cancelBtn.addEventListener('click', () => overlay.remove());
+
+  sheet.appendChild(title);
+  sheet.appendChild(callLink);
+  sheet.appendChild(tgLink);
+  sheet.appendChild(cancelBtn);
+  overlay.appendChild(sheet);
   overlay.addEventListener('click', (e) => { if (e.target === overlay) overlay.remove(); });
   document.body.appendChild(overlay);
 }
@@ -867,7 +901,18 @@ function showContactModal(phone, telegramId) {
 function showFullscreen(url) {
   const overlay = document.createElement('div');
   overlay.className = 'fullscreen-overlay';
-  overlay.innerHTML = `<img src="${url}"><button class="fullscreen-close" onclick="this.parentElement.remove()">✕</button>`;
+
+  const img = document.createElement('img');
+  img.src = url;
+
+  const closeBtn = document.createElement('button');
+  closeBtn.className = 'fullscreen-close';
+  closeBtn.textContent = '✕';
+  closeBtn.addEventListener('click', () => overlay.remove());
+
+  overlay.appendChild(img);
+  overlay.appendChild(closeBtn);
+  overlay.addEventListener('click', (e) => { if (e.target === overlay) overlay.remove(); });
   document.body.appendChild(overlay);
 }
 
@@ -986,19 +1031,22 @@ function bindEditProfile() {
     });
   });
 
-  document.getElementById('saveEditBtn')?.addEventListener('click', async () => {
+  document.getElementById('saveEditBtn')?.addEventListener('click', async (e) => {
+    const btn = e.currentTarget;
     const name = document.getElementById('editName').value.trim();
     const rawPhone = document.getElementById('editPhone').value;
     const phone = normalizePhone(rawPhone);
     if (name.length < 2) { showToast('Ism kamida 2 belgi'); return; }
     if (editProfs.length === 0) { showToast('Kamida bitta kasb tanlang'); return; }
     if (!isPhoneValid(rawPhone)) { showToast('To\'liq raqam kiriting'); return; }
+    btn.disabled = true;
     try {
       const res = await api('PUT', `/api/masters/${masterData.id}`, { name, phone, professions: editProfs, district: editDist });
       masterData = res.master;
       showToast('✅ Saqlandi');
       navigate(PAGES.MASTER_HOME);
     } catch (err) {
+      btn.disabled = false;
       showToast('❌ ' + err.message);
     }
   });
