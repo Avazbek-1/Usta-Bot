@@ -252,9 +252,14 @@ function getDistrictLabel(id) {
 }
 
 function renderStars(rating, count) {
+  if (!rating || rating === 0) {
+    return count > 0
+      ? `⭐ ${count} izoh`
+      : `<span style="color:#aaa;font-size:13px">Yangi usta</span>`;
+  }
   const full = Math.round(rating);
   const stars = '⭐'.repeat(full) + '☆'.repeat(5 - full);
-  return `${stars} <span style="color:#666;font-size:13px">${rating > 0 ? rating : ''} ${count > 0 ? '· ' + count + ' izoh' : ''}</span>`;
+  return `${stars} <span style="color:#666;font-size:13px">${rating}${count > 0 ? ' · ' + count + ' izoh' : ''}</span>`;
 }
 
 function formatDate(iso) {
@@ -301,11 +306,12 @@ function renderMasterHome() {
   const initials = getInitials(masterData.name);
   return `
   <div class="page">
-    <div class="profile-header card" style="margin:0;border-radius:0">
+    <div class="profile-header card" style="margin:0;border-radius:0;cursor:pointer" id="masterProfileHeader">
       <div class="avatar avatar-lg">${initials}</div>
       <div class="name">${masterData.name}</div>
       <div class="profession">${renderProfBadges(masterData)}</div>
       <div class="profession">${dist.emoji} ${dist.label}</div>
+      <div style="color:var(--blue);font-size:13px;margin-top:6px">👁 Profilimni ko'rish</div>
     </div>
     <div class="page-content">
       <div class="stats-row card">
@@ -344,6 +350,7 @@ function renderMasterHome() {
 }
 
 function bindMasterHome() {
+  document.getElementById('masterProfileHeader')?.addEventListener('click', () => navigate(PAGES.MY_PROFILE));
   document.getElementById('addPhotoBtn')?.addEventListener('click', () => navigate(PAGES.PHOTOS));
   document.getElementById('editProfileBtn')?.addEventListener('click', () => navigate(PAGES.EDIT_PROFILE));
 }
@@ -359,6 +366,7 @@ window.setNav = function(tab) {
 // --- REGISTER (3 steps) ---
 let regStep = 1;
 let regData = { name: '', professions: [], district: '', phone: '', photos: [] };
+let _isSubmitting = false;
 
 function renderRegister() {
   const dots = [1,2,3].map(i => `<div class="dot ${i < regStep ? 'done' : i === regStep ? 'active' : ''}"></div>`).join('');
@@ -529,8 +537,9 @@ function bindRegister() {
 }
 
 async function submitRegister() {
-  const btn = document.getElementById('finishReg');
-  if (btn) btn.disabled = true;
+  if (_isSubmitting) return;
+  _isSubmitting = true;
+  document.querySelectorAll('#finishReg, #skipPhotos').forEach(b => { if (b) b.disabled = true; });
   try {
     const payload = {
       telegram_id: userId || Date.now(),
@@ -544,11 +553,13 @@ async function submitRegister() {
     masterData = res.master;
     regStep = 1;
     regData = { name: '', professions: [], district: '', phone: '', photos: [] };
+    _isSubmitting = false;
     showToast('✅ Muvaffaqiyatli ro\'yxatdan o\'tdingiz!');
     navigate(PAGES.MASTER_HOME);
   } catch (err) {
+    _isSubmitting = false;
+    document.querySelectorAll('#finishReg, #skipPhotos').forEach(b => { if (b) b.disabled = false; });
     showToast('❌ ' + err.message);
-    if (btn) btn.disabled = false;
   }
 }
 
@@ -846,6 +857,9 @@ function showFullscreen(url) {
 function renderMyProfile() {
   if (!masterData) return renderLoading();
   const dist = getDistrictLabel(masterData.district);
+  const photos = masterData.photos && masterData.photos.length > 0
+    ? `<div class="photo-grid">${masterData.photos.slice(0, 6).map(p => `<div class="photo-cell" data-url="${p}"><img src="${p}" alt="" loading="lazy"></div>`).join('')}</div>`
+    : '<div style="color:#999;font-size:14px;text-align:center;padding:12px">Rasmlar yo\'q</div>';
   return `
   <div class="page">
     <div class="page-header">
@@ -860,12 +874,26 @@ function renderMyProfile() {
       <div class="profession">📞 ${masterData.phone}</div>
     </div>
     <div class="page-content">
-      <button class="btn-primary" onclick="navigate('${PAGES.EDIT_PROFILE}')">✏️ Tahrirlash</button>
+      <div class="stats-row card">
+        <div class="stat-card"><div class="stat-value">${masterData.rating > 0 ? masterData.rating : '—'}</div><div class="stat-label">Reyting</div></div>
+        <div class="stat-card"><div class="stat-value">${masterData.review_count}</div><div class="stat-label">Izoh</div></div>
+        <div class="stat-card"><div class="stat-value">${masterData.views}</div><div class="stat-label">Ko'rish</div></div>
+      </div>
+      <div class="card">
+        <div class="form-label" style="margin-bottom:10px">Ishlar rasmlari</div>
+        ${photos}
+      </div>
+      <button class="btn-primary" onclick="navigate('${PAGES.EDIT_PROFILE}')">✏️ Profilni tahrirlash</button>
+      <button class="btn-secondary btn-gap" onclick="navigate('${PAGES.PHOTOS}')">📸 Rasmlarni boshqarish</button>
     </div>
   </div>`;
 }
 
-function bindMyProfile() {}
+function bindMyProfile() {
+  document.querySelectorAll('.photo-cell[data-url]').forEach(el => {
+    el.addEventListener('click', () => showFullscreen(el.dataset.url));
+  });
+}
 
 // --- EDIT PROFILE ---
 function renderEditProfile() {
@@ -963,12 +991,14 @@ function renderPhotos() {
   if (!masterData) return renderLoading();
   const photos = masterData.photos || [];
   const slots = [];
-  for (let i = 0; i < Math.max(photos.length + 1, 3); i++) {
+  const totalSlots = Math.max(photos.length + (photos.length < 10 ? 1 : 0), 3);
+  for (let i = 0; i < totalSlots; i++) {
     if (i < photos.length) {
       slots.push(`<div class="photo-cell" data-idx="${i}"><img src="${photos[i]}" alt="" loading="lazy"><div style="position:absolute;top:4px;right:4px;background:rgba(0,0,0,0.5);border-radius:50%;width:24px;height:24px;display:flex;align-items:center;justify-content:center;color:white;font-size:14px;cursor:pointer" data-del="${i}">✕</div></div>`);
-    } else if (photos.length < 10) {
+    } else if (i === photos.length && photos.length < 10) {
       slots.push(`<div class="photo-cell empty" id="photoAdd">+</div>`);
-      break;
+    } else {
+      slots.push(`<div class="photo-cell" style="background:var(--bg);border:1.5px dashed var(--border)"></div>`);
     }
   }
   return `
