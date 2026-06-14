@@ -176,8 +176,12 @@ function compressImage(file) {
 
 // === GLOBAL FILE PICKER ===
 let _fileCallback = null;
+let _pickerLastOpen = 0;
 
 function openFilePicker(callback) {
+  const now = Date.now();
+  if (now - _pickerLastOpen < 1500) return; // phantom click protection
+  _pickerLastOpen = now;
   _fileCallback = callback;
   const input = document.getElementById('globalFileInput');
   input.value = '';
@@ -186,6 +190,7 @@ function openFilePicker(callback) {
 
 function initFilePicker() {
   document.getElementById('globalFileInput').addEventListener('change', async (e) => {
+    _pickerLastOpen = 0; // reset so next open works immediately
     const file = e.target.files[0];
     if (!file || !_fileCallback) return;
     const cb = _fileCallback;
@@ -197,6 +202,11 @@ function initFilePicker() {
     } catch (err) {
       showToast('❌ ' + err.message);
     }
+  });
+
+  // Agar foydalanuvchi galereyani yopsa (fayl tanlamasdan), cooldown reset bo'lsin
+  window.addEventListener('focus', () => {
+    setTimeout(() => { _pickerLastOpen = 0; }, 600);
   });
 }
 
