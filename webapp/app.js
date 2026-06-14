@@ -88,6 +88,8 @@ if (tg && tg.BackButton) {
 function navigate(page, data = {}) {
   appState = { ...appState, ...data };
   currentPage = page;
+  if (page === PAGES.MASTER_HOME) currentNav = 'home';
+  else if (page === PAGES.CLIENT_HOME) currentNav = 'search';
   if (tg && tg.BackButton) {
     ROOT_PAGES.includes(page) ? tg.BackButton.hide() : tg.BackButton.show();
   }
@@ -287,11 +289,6 @@ async function handleOnboarding(role) {
       navigate(PAGES.REGISTER);
     }
   } else {
-    if (userId) {
-      try {
-        await api('POST', '/api/waiting', { telegram_id: userId, profession: '', district: '' });
-      } catch (_) {}
-    }
     navigate(PAGES.CLIENT_HOME);
   }
 }
@@ -531,16 +528,6 @@ function bindRegister() {
   }
 }
 
-async function handlePhotoUpload(e) {
-  const file = e.target.files[0];
-  if (!file) return;
-  const compressed = await compressImage(file);
-  if (regData.photos.length < 10) {
-    regData.photos.push(compressed);
-    render();
-  }
-}
-
 async function submitRegister() {
   const btn = document.getElementById('finishReg');
   if (btn) btn.disabled = true;
@@ -683,9 +670,10 @@ function renderResults() {
       <div class="empty-state">
         <div class="empty-icon">😔</div>
         <div class="empty-title">Hozircha usta yo'q</div>
-        <div class="empty-text">Bu hududda hozircha ${prof.label.toLowerCase()} yo'q.<br>Usta ro'yxatdan o'tgach sizga xabar beramiz!</div>
+        <div class="empty-text">Bu hududda hozircha ${prof.label.toLowerCase()} yo'q.</div>
         <div style="height:24px"></div>
-        <button class="btn-primary" id="leaveNumber">📱 Raqamni qoldirish</button>
+        <button class="btn-primary" onclick="navigate('${PAGES.ORDER_FORM}')">📝 Buyurtma berish</button>
+        <button class="btn-secondary btn-gap" id="leaveNumber">📱 Raqamni qoldirish</button>
         <button class="btn-ghost btn-gap" onclick="navigate('${PAGES.SEARCH}')">← Boshqa qidirish</button>
       </div>
     </div>`;
@@ -799,8 +787,11 @@ function renderProfile() {
         <div class="form-label" style="margin-bottom:10px">Izohlar</div>
         ${reviews}
       </div>
-      <button class="btn-primary" id="contactBtn">📞 Bog'lanish</button>
-      <button class="btn-secondary btn-gap" id="rateBtn">⭐ Baho berish</button>
+      ${m.telegram_id === userId
+        ? `<div style="text-align:center;padding:12px;color:var(--text-secondary);font-size:14px">Bu sizning profilingiz</div>`
+        : `<button class="btn-primary" id="contactBtn">📞 Bog'lanish</button>
+           <button class="btn-secondary btn-gap" id="rateBtn">⭐ Baho berish</button>`
+      }
     </div>
   </div>`;
 }
@@ -894,7 +885,7 @@ function renderEditProfile() {
         <label class="form-label">Kasb (bir nechtasini tanlash mumkin)</label>
         <div class="chip-grid" id="editProfGrid">
           ${PROFESSIONS.map(p => `
-            <div class="chip ${getProfLabels(masterData).map(x=>x.id||p.id).includes(p.id) || (masterData.professions||[masterData.profession]).includes(p.id) ?'selected':''}" data-prof="${p.id}">
+            <div class="chip ${(masterData.professions || (masterData.profession ? [masterData.profession] : [])).includes(p.id) ? 'selected' : ''}" data-prof="${p.id}">
               ${p.emoji} ${p.label}
             </div>`).join('')}
         </div>
@@ -1132,7 +1123,7 @@ function renderOrderForm() {
       </div>
       <div class="form-group">
         <label class="form-label">Qisqacha tavsif (ixtiyoriy)</label>
-        <textarea id="orderDesc" placeholder="Masalan: vannaxona 15 kv.m, seramika yotqizish..." style="width:100%;min-height:80px;border:1.5px solid var(--border);border-radius:10px;padding:10px;font-size:15px;resize:none;box-sizing:border-box;font-family:inherit" maxlength="300"></textarea>
+        <textarea id="orderDesc" placeholder="Masalan: vannaxona 15 kv.m, seramika yotqizish..." maxlength="300"></textarea>
       </div>
       <button class="btn-primary" id="orderSubmitBtn">📝 Buyurtma yuborish</button>
     </div>
@@ -1164,8 +1155,11 @@ function bindOrderForm() {
     document.getElementById('orderDistErr').textContent = '';
     if (!orderProf) { document.getElementById('orderProfErr').textContent = 'Kasb tanlang'; return; }
     if (!orderDist) { document.getElementById('orderDistErr').textContent = 'Hudud tanlang'; return; }
+    if (!userId) { showToast('Telegram orqali kirish kerak'); return; }
 
     const desc = document.getElementById('orderDesc').value.trim();
+    const btn = document.getElementById('orderSubmitBtn');
+    if (btn) btn.disabled = true;
     try {
       await api('POST', '/api/orders', {
         client_telegram_id: userId,
@@ -1178,6 +1172,7 @@ function bindOrderForm() {
       navigate(PAGES.CLIENT_HOME);
     } catch (err) {
       showToast('❌ ' + err.message);
+      if (btn) btn.disabled = false;
     }
   });
 }

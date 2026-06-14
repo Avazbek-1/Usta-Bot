@@ -143,6 +143,14 @@ app.get('/api/masters/search', async (req, res) => {
   res.json(results);
 });
 
+// GET /api/masters/by-tg/:telegram_id  ← must be before /:id
+app.get('/api/masters/by-tg/:telegram_id', async (req, res) => {
+  await db.read();
+  const master = db.data.masters.find(m => m.telegram_id === Number(req.params.telegram_id));
+  if (!master) return res.status(404).json({ error: 'Usta topilmadi' });
+  res.json(master);
+});
+
 // GET /api/masters/:id
 app.get('/api/masters/:id', async (req, res) => {
   await db.read();
@@ -321,14 +329,6 @@ app.post('/api/orders/:id/contact', async (req, res) => {
   order.contacts++;
   await db.write();
   res.json({ ok: true, client_telegram_id: order.client_telegram_id });
-});
-
-// GET /api/masters/:telegram_id/by-tg
-app.get('/api/masters/by-tg/:telegram_id', async (req, res) => {
-  await db.read();
-  const master = db.data.masters.find(m => m.telegram_id === Number(req.params.telegram_id));
-  if (!master) return res.status(404).json({ error: 'Usta topilmadi' });
-  res.json(master);
 });
 
 async function start() {
