@@ -65,7 +65,7 @@ const ROOT_PAGES = [PAGES.LOADING, PAGES.ONBOARDING, PAGES.MASTER_HOME, PAGES.CL
 
 function goBack() {
   switch (currentPage) {
-    case PAGES.REGISTER:     window.goBackFromRegister(); break;
+    case PAGES.REGISTER:     regStep > 1 ? (regStep--, render()) : window.goBackFromRegister(); break;
     case PAGES.SEARCH:       navigate(PAGES.CLIENT_HOME); break;
     case PAGES.RESULTS:      navigate(PAGES.SEARCH); break;
     case PAGES.PROFILE:      navigate(PAGES.RESULTS); break;
@@ -128,12 +128,24 @@ async function api(method, path, body) {
   return data;
 }
 
+// === HTML ESCAPE (XSS prevention) ===
+function esc(str) {
+  return String(str == null ? '' : str)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+}
+
 // === IMAGE COMPRESSION ===
 function compressImage(file) {
-  return new Promise((resolve) => {
+  return new Promise((resolve, reject) => {
     const reader = new FileReader();
+    reader.onerror = () => reject(new Error('Faylni o\'qib bo\'lmadi'));
     reader.onload = (e) => {
       const img = new Image();
+      img.onerror = () => reject(new Error('Rasm yuklanmadi'));
       img.onload = () => {
         const MAX = 800;
         let w = img.width, h = img.height;
@@ -170,8 +182,12 @@ function initFilePicker() {
     const cb = _fileCallback;
     _fileCallback = null;
     showToast('⏳ Rasm siqilmoqda...');
-    const compressed = await compressImage(file);
-    cb(compressed);
+    try {
+      const compressed = await compressImage(file);
+      cb(compressed);
+    } catch (err) {
+      showToast('❌ ' + err.message);
+    }
   });
 }
 
@@ -217,6 +233,7 @@ function isPhoneValid(formatted) {
 }
 
 // === TOAST ===
+let _toastTimer = null;
 function showToast(msg, duration = 2500) {
   let t = document.querySelector('.toast');
   if (!t) {
@@ -224,9 +241,10 @@ function showToast(msg, duration = 2500) {
     t.className = 'toast';
     document.body.appendChild(t);
   }
+  if (_toastTimer) clearTimeout(_toastTimer);
   t.textContent = msg;
   t.classList.add('show');
-  setTimeout(() => t.classList.remove('show'), duration);
+  _toastTimer = setTimeout(() => { t.classList.remove('show'); _toastTimer = null; }, duration);
 }
 
 // === HELPERS ===
@@ -307,10 +325,10 @@ function renderMasterHome() {
   return `
   <div class="page">
     <div class="profile-header card" style="margin:0;border-radius:0;cursor:pointer" id="masterProfileHeader">
-      <div class="avatar avatar-lg">${initials}</div>
-      <div class="name">${masterData.name}</div>
+      <div class="avatar avatar-lg">${esc(initials)}</div>
+      <div class="name">${esc(masterData.name)}</div>
       <div class="profession">${renderProfBadges(masterData)}</div>
-      <div class="profession">${dist.emoji} ${dist.label}</div>
+      <div class="profession">${dist.emoji} ${esc(dist.label)}</div>
       <div style="color:var(--blue);font-size:13px;margin-top:6px">👁 Profilimni ko'rish</div>
     </div>
     <div class="page-content">
@@ -389,7 +407,7 @@ function renderRegStep1(dots) {
     <div class="page-content">
       <div class="form-group">
         <label class="form-label">Ismingiz</label>
-        <input type="text" id="regName" placeholder="Ism va familiya" value="${regData.name}" maxlength="50">
+        <input type="text" id="regName" placeholder="Ism va familiya" value="${esc(regData.name)}" maxlength="50">
         <div class="form-error" id="nameErr"></div>
       </div>
       <div class="form-group">
@@ -694,7 +712,7 @@ function renderResults() {
     <div class="master-card" data-id="${m.id}">
       <div class="avatar">${getInitials(m.name)}</div>
       <div class="info">
-        <div class="name">${m.name}</div>
+        <div class="name">${esc(m.name)}</div>
         <div class="meta">${renderStars(m.rating, m.review_count)}</div>
       </div>
       <div class="arrow">›</div>
@@ -758,7 +776,7 @@ function renderProfile() {
     ? m.reviews.map(r => `
       <div class="review-card">
         <div class="review-stars">${'⭐'.repeat(r.rating)}</div>
-        ${r.comment ? `<div class="review-text">"${r.comment}"</div>` : ''}
+        ${r.comment ? `<div class="review-text">"${esc(r.comment)}"</div>` : ''}
         <div class="review-date">${formatDate(r.created_at)}</div>
       </div>`).join('')
     : '<div style="color:#999;font-size:14px">Hali izoh yo\'q</div>';
@@ -771,9 +789,9 @@ function renderProfile() {
     </div>
     <div class="profile-header card" style="margin:0;border-radius:0">
       <div class="avatar avatar-lg">${getInitials(m.name)}</div>
-      <div class="name">${m.name}</div>
+      <div class="name">${esc(m.name)}</div>
       <div class="profession">${renderProfBadges(m)}</div>
-      <div class="profession">${dist.emoji} ${dist.label}</div>
+      <div class="profession">${dist.emoji} ${esc(dist.label)}</div>
     </div>
     <div class="page-content">
       <div class="stats-row card">
@@ -867,11 +885,11 @@ function renderMyProfile() {
       <div class="page-title">Mening profilim</div>
     </div>
     <div class="profile-header card" style="margin:0;border-radius:0">
-      <div class="avatar avatar-lg">${getInitials(masterData.name)}</div>
-      <div class="name">${masterData.name}</div>
+      <div class="avatar avatar-lg">${esc(getInitials(masterData.name))}</div>
+      <div class="name">${esc(masterData.name)}</div>
       <div class="profession">${renderProfBadges(masterData)}</div>
-      <div class="profession">${dist.emoji} ${dist.label}</div>
-      <div class="profession">📞 ${masterData.phone}</div>
+      <div class="profession">${dist.emoji} ${esc(dist.label)}</div>
+      <div class="profession">📞 ${esc(masterData.phone)}</div>
     </div>
     <div class="page-content">
       <div class="stats-row card">
@@ -907,7 +925,7 @@ function renderEditProfile() {
     <div class="page-content">
       <div class="form-group">
         <label class="form-label">Ism</label>
-        <input type="text" id="editName" value="${masterData.name}" maxlength="50">
+        <input type="text" id="editName" value="${esc(masterData.name)}" maxlength="50">
       </div>
       <div class="form-group">
         <label class="form-label">Kasb (bir nechtasini tanlash mumkin)</label>
@@ -929,7 +947,7 @@ function renderEditProfile() {
       </div>
       <div class="form-group">
         <label class="form-label">Telefon</label>
-        <input type="tel" id="editPhone" value="${masterData.phone}" inputmode="numeric">
+        <input type="tel" id="editPhone" value="${esc(masterData.phone)}" inputmode="numeric">
       </div>
       <button class="btn-primary" id="saveEditBtn">💾 Saqlash</button>
     </div>
@@ -1073,7 +1091,7 @@ function renderRating() {
     </div>
     <div class="page-content">
       <div class="card" style="text-align:center">
-        <div style="font-weight:600;font-size:16px;margin-bottom:16px">${name}</div>
+        <div style="font-weight:600;font-size:16px;margin-bottom:16px">${esc(name)}</div>
         <div class="stars-input" id="starsInput">
           <span data-star="1">☆</span>
           <span data-star="2">☆</span>
@@ -1109,8 +1127,9 @@ function bindRating() {
     });
   });
 
-  document.getElementById('saveRating')?.addEventListener('click', async () => {
+  document.getElementById('saveRating')?.addEventListener('click', async (e) => {
     if (!selectedRating) { showToast('Yulduz tanlang'); return; }
+    e.currentTarget.disabled = true;
     const comment = document.getElementById('reviewComment').value.trim();
     try {
       await api('POST', '/api/reviews', {
@@ -1123,6 +1142,7 @@ function bindRating() {
       const master = await api('GET', `/api/masters/${appState.ratingMasterId}`);
       navigate(PAGES.PROFILE, { viewedMaster: master });
     } catch (err) {
+      e.currentTarget.disabled = false;
       showToast('❌ ' + err.message);
     }
   });
@@ -1228,12 +1248,14 @@ function renderOrders() {
 }
 
 async function bindOrders() {
-  const container = document.getElementById('ordersList');
-  if (!container || !masterData) return;
+  if (!masterData) return;
 
   try {
     const profStr = (masterData.professions || []).join(',');
     const orders = await api('GET', `/api/orders?professions=${encodeURIComponent(profStr)}`);
+
+    const container = document.getElementById('ordersList');
+    if (!container) return; // foydalanuvchi sahifadan ketgan
 
     if (orders.length === 0) {
       container.innerHTML = `
@@ -1249,14 +1271,14 @@ async function bindOrders() {
       const prof = PROFESSIONS.find(p => p.id === o.profession);
       const dist = DISTRICTS.find(d => d.id === o.district);
       return `
-        <div class="card" style="margin-bottom:12px" data-oid="${o.id}" data-ctid="${o.client_telegram_id}">
+        <div class="card" style="margin-bottom:12px">
           <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px">
-            <div style="font-weight:700;font-size:15px">${prof?.emoji || '🛠️'} ${prof?.label || o.profession}</div>
+            <div style="font-weight:700;font-size:15px">${prof?.emoji || '🛠️'} ${esc(prof?.label || o.profession)}</div>
             <div style="font-size:12px;color:#aaa">${formatDate(o.created_at)}</div>
           </div>
-          <div style="font-size:14px;color:#666;margin-bottom:4px">${dist?.emoji || '📍'} ${dist?.label || o.district}</div>
-          <div style="font-size:13px;color:#888;margin-bottom:8px">👤 ${o.client_name}</div>
-          ${o.description ? `<div style="font-size:14px;color:#333;background:#f7f8fa;border-radius:8px;padding:8px 10px;margin-bottom:10px;font-style:italic">"${o.description}"</div>` : ''}
+          <div style="font-size:14px;color:#666;margin-bottom:4px">${dist?.emoji || '📍'} ${esc(dist?.label || o.district)}</div>
+          <div style="font-size:13px;color:#888;margin-bottom:8px">👤 ${esc(o.client_name)}</div>
+          ${o.description ? `<div style="font-size:14px;color:#333;background:#f7f8fa;border-radius:8px;padding:8px 10px;margin-bottom:10px;font-style:italic">"${esc(o.description)}"</div>` : ''}
           <button class="btn-primary order-contact-btn" style="padding:10px" data-oid="${o.id}" data-ctid="${o.client_telegram_id}">✈️ Telegram orqali bog'lanish</button>
         </div>`;
     }).join('');
@@ -1264,11 +1286,12 @@ async function bindOrders() {
     container.querySelectorAll('.order-contact-btn').forEach(btn => {
       btn.addEventListener('click', async () => {
         try { await api('POST', `/api/orders/${btn.dataset.oid}/contact`); } catch (_) {}
-        window.location.href = `tg://user?id=${btn.dataset.ctid}`;
+        window.open(`tg://user?id=${btn.dataset.ctid}`, '_blank');
       });
     });
   } catch (err) {
-    container.innerHTML = `<div style="text-align:center;padding:40px;color:#999">Xato yuz berdi</div>`;
+    const container = document.getElementById('ordersList');
+    if (container) container.innerHTML = `<div style="text-align:center;padding:40px;color:#999">Xato yuz berdi</div>`;
   }
 }
 
