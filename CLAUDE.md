@@ -2,14 +2,14 @@
 
 ## Loyiha haqida
 Telegram Bot + Web App: Farg'ona viloyati uchun qurilish ustalari platformasi.
-Usta topish, ro'yxatdan o'tish, reyting berish.
+Usta topish, ro'yxatdan o'tish, reyting berish, buyurtma tizimi.
 
 ## Tech Stack
 - **Bot**: Grammy (Node.js) — faqat "Ilovani ochish" tugmasi
 - **Web App**: Vanilla HTML/CSS/JS (SPA — bitta sahifa, client-side routing)
-- **Server**: Express.js (API + static files)
-- **DB**: LowDB (JSON fayl — `data/db.json`)
-- **Deploy**: Render.com (bepul tier)
+- **Server**: Express.js 5.x, ESM modules (`"type": "module"`)
+- **DB**: JSONBin.io REST API (in-memory, write-through; `JSONBIN_API_KEY`, `JSONBIN_BIN_ID`)
+- **Deploy**: Railway (yoki Render.com)
 
 ## Fayl tuzilmasi
 ```
@@ -17,11 +17,11 @@ fargona-usta/
 ├── bot/index.js         ← Grammy bot (/start → Web App tugma)
 ├── server/index.js      ← Express server + barcha API endpointlar
 ├── webapp/
-│   ├── index.html       ← SPA skeleton
+│   ├── index.html       ← SPA skeleton; globalFileInput body ichida, #app dan tashqarida
 │   ├── style.css        ← CSS variables + barcha stillar
 │   └── app.js           ← Barcha JS: router, render, bind funksiyalar
-├── data/db.json         ← Ma'lumotlar (masters, clients, reviews, waiting_clients)
-├── .env                 ← BOT_TOKEN, ADMIN_ID, WEBAPP_URL, PORT, NODE_ENV
+├── .env                 ← BOT_TOKEN, ADMIN_ID, WEBAPP_URL, PORT, NODE_ENV,
+│                           JSONBIN_API_KEY, JSONBIN_BIN_ID
 └── package.json         ← type: "module", scripts: start/dev
 ```
 
@@ -35,72 +35,110 @@ Server: http://localhost:3000
 
 ## API Endpointlar
 ```
-GET  /health                          → { ok: true }
+GET  /health
 GET  /api/user/:telegram_id           → { role: 'master'|'client'|'new', data }
 POST /api/masters                     → yangi usta yaratish
-GET  /api/masters/search?profession=&district=  → qidiruv (reyting bo'yicha)
+GET  /api/masters/search?profession=&district=
+GET  /api/masters/by-tg/:telegram_id  ← /:id DAN OLDIN kelishi shart (route order)
 GET  /api/masters/:id                 → usta profili + reviews
-GET  /api/masters/by-tg/:telegram_id  → telegram_id bo'yicha usta
 PUT  /api/masters/:id                 → profil tahrirlash
-POST /api/masters/:id/contact         → kontakt (views++ contacts++)
-POST /api/masters/:id/view            → ko'rish (views++)
+POST /api/masters/:id/contact         → views++ contacts++
+POST /api/masters/:id/view            → views++
 POST /api/masters/:id/photos          → rasm qo'shish (max 10)
 DELETE /api/masters/:id/photos/:index → rasm o'chirish
 POST /api/reviews                     → baho berish
-POST /api/waiting                     → usta yo'q bo'lsa raqam qoldirish
+POST /api/waiting                     → usta yo'q bo'lsa kutish ro'yxati
+POST /api/orders                      → buyurtma yaratish (client)
+GET  /api/orders?professions=         → buyurtmalarni kasblar bo'yicha filter
+POST /api/orders/:id/contact          → contacts++, client_telegram_id qaytaradi
 ```
 
-## Web App sahifalari (app.js)
-| Sahifa | Konstanta | Tavsif |
-|---|---|---|
-| Loading | PAGES.LOADING | Spinner |
-| Onboarding | PAGES.ONBOARDING | Usta/Mijoz tanlash |
-| Master Home | PAGES.MASTER_HOME | Statistika + bottom nav |
-| Register | PAGES.REGISTER | 3 qadamli ro'yxat |
-| Client Home | PAGES.CLIENT_HOME | Kasb tanlash grid |
-| Search | PAGES.SEARCH | Hudud tanlash |
-| Results | PAGES.RESULTS | Ustalar ro'yxati |
-| Profile | PAGES.PROFILE | Usta profili (mijoz ko'radi) |
-| My Profile | PAGES.MY_PROFILE | Usta o'z profili |
-| Edit Profile | PAGES.EDIT_PROFILE | Profil tahrirlash |
-| Photos | PAGES.PHOTOS | Rasm boshqarish |
-| Rating | PAGES.RATING | Yulduz baho berish |
-| Not Found | PAGES.NOT_FOUND | 404 |
+## Web App sahifalari (PAGES enum)
+| Konstanta | Tavsif |
+|---|---|
+| LOADING | Spinner |
+| ONBOARDING | Usta/Mijoz tanlash |
+| MASTER_HOME | Statistika + bottom nav (home/photos/orders/profile) |
+| REGISTER | 3 qadamli ro'yxat |
+| CLIENT_HOME | Kasb tanlash grid + buyurtma berish linki |
+| SEARCH | Hudud tanlash |
+| RESULTS | Ustalar ro'yxati |
+| PROFILE | Usta profili (mijoz ko'radi) |
+| MY_PROFILE | Usta o'z profili (statistika + rasmlar) |
+| EDIT_PROFILE | Profil tahrirlash |
+| PHOTOS | Rasm boshqarish |
+| RATING | Yulduz baho berish |
+| ORDER_FORM | Buyurtma berish (client) |
+| ORDERS | Kelgan buyurtmalar (master) |
+| NOT_FOUND | 404 |
 
-## Dizayn qoidalari (O'ZGARTIRILMASIN)
+## Muhim arxitektura qarorlari
+
+### Routing
+- `navigate(page, data)` — appState ni merge qiladi, BackButton ni boshqaradi, render() chaqiradi
+- `ROOT_PAGES` = [LOADING, ONBOARDING, MASTER_HOME, CLIENT_HOME] — bular da BackButton yashiriladi
+- `goBack()` — Telegram BackButton uchun; REGISTER da `regStep > 1` bo'lsa qadam orqaga
+
+### Rasm yuklash (kritik)
+- `globalFileInput` — `display:none` EMAS, `position:fixed;top:-9999px` (Android WebView da
+  display:none bilan galereya darhol yopiladi)
+- `openFilePicker(callback)` — 1.5s phantom-click muhofazasi (`_pickerLastOpen` timestamp)
+- `initFilePicker()` — change da va window.focus da `_pickerLastOpen = 0` reset
+- Rasm siqish: 800×800 max, JPEG 70%, `compressImage()` Promise reject on error
+
+### XSS himoya
+- `esc(str)` funksiyasi — barcha user-controlled data innerHTML ga kirishdan oldin escaped
+- Qo'llanilgan: name, phone, district.label, comment, client_name, description, usta ismi
+
+### API timeout
+- `api()` — `AbortController` bilan 10 soniya timeout; tugasa "So'rov vaqti tugadi (10s)"
+
+### Double-submit oldini olish
+- `submitRegister` — `_isSubmitting` flag + finishReg/skipPhotos disabled
+- `saveEditBtn` — `btn.disabled = true` saqlash vaqtida
+- `contactBtn` — `btn.disabled = true` API call vaqtida
+- `saveRating` — `e.currentTarget.disabled = true`
+
+### Bog'lanish modal
+- `showContactModal(phone, telegramId)` — bottom sheet overlay, addEventListener (inline onclick yo'q)
+- `showFullscreen(url)` — to'liq ekran rasm, addEventListener
+
+### Telegram deep link
+- `window.open('tg://user?id=...', '_blank')` — window.location.href EMAS (SPA crash bo'ladi)
+
+### Toast
+- `_toastTimer` — clearTimeout bilan race condition tuzatildi
+
+### bindOrders (async null-safety)
+- `document.getElementById('ordersList')` — await DAN KEYIN tekshiriladi (foydalanuvchi ketib qolishi)
+
+## Dizayn qoidalari
 - Fon: `#f7f8fa`, Karta: `#ffffff`, Ko'k: `#0088cc`
 - Tugmalar: `min-height: 48px`, `border-radius: 12px`
 - Max kenglik: `480px` (mobil)
 - Til: O'zbek, qisqa jumlalar
-- Bot faqat bitta tugma ko'rsatadi: "Ilovani ochish"
-- Barcha funksiyalar Web App ichida
 
 ## Bajarilgan bosqichlar
-- [x] BOSQICH 1 — Loyiha sozlash
-- [x] BOSQICH 2 — Server + Bot
-- [x] BOSQICH 3 — Web App asosi + Router
-- [x] BOSQICH 4 — Onboarding
-- [x] BOSQICH 5 — Usta ro'yxatdan o'tish (3 qadam)
-- [x] BOSQICH 6 — Usta bosh sahifasi
-- [x] BOSQICH 7 — Rasmlar sahifasi
-- [x] BOSQICH 8 — Mijoz bosh sahifasi + qidiruv
-- [x] BOSQICH 9 — Natijalar + usta profili
-- [x] BOSQICH 10 — Baho berish
-- [x] BOSQICH 11 — Error handling + polishing
-- [ ] BOSQICH 12 — Production deploy (Render.com)
+- [x] BOSQICH 1–11 — Loyiha, Server, Bot, SPA, Onboarding, Ro'yxat, Usta/Mijoz sahifalari,
+       Rasmlar, Qidiruv, Profil, Baho, Buyurtma tizimi, Bug fix + security
+- [ ] BOSQICH 12 — Production deploy (Railway yoki Render.com)
 
 ## Keyingi qadam: BOSQICH 12 — Deploy
-1. GitHub repo yaratish va push qilish
-2. Render.com da "New Web Service" → GitHub ulash
-3. Environment variables qo'shish (BOT_TOKEN, ADMIN_ID, WEBAPP_URL, NODE_ENV=production)
+1. GitHub repo tayyor: https://github.com/Avazbek-1/Usta-Bot.git
+2. Railway/Render da "New Web Service" → GitHub ulash
+3. Environment variables: BOT_TOKEN, ADMIN_ID, WEBAPP_URL, NODE_ENV=production,
+   JSONBIN_API_KEY, JSONBIN_BIN_ID
 4. Build: `npm install`, Start: `npm start`
-5. Persistent disk: `/data` path, 1GB (db.json uchun)
-6. node-cron bilan keep-alive ping qo'shish (har 14 daqiqa)
-7. BOT_TOKEN va WEBAPP_URL ni real qiymatlar bilan yangilash
+5. Webhook avtomatik o'rnatiladi (production modeda)
 
-## Muhim eslatmalar
-- `data/db.json` production da `/data/db.json` bo'ladi (Render disk)
-- Rasm yuklash hozir base64 DataURL sifatida saqlanadi — production uchun yetarli
-- `userId` Telegram WebApp dan keladi; dev modeda `12345` fallback ishlatiladi
-- Usta o'ziga baho bera olmaydi (server tekshiradi)
-- Bitta mijoz bitta ustaga faqat 1 marta baho bera oladi
+## Hal qilingan muhim xatolar (tarix)
+- `getInitials(null)` → crash → `String(name || '?')` + `filter(Boolean)`
+- `formatDate(null)` → "01/01/1970" → `isNaN(d.getTime())` tekshiruvi
+- `by-tg/:tid` route `/:id` dan keyin edi → oldiniga ko'chirildi
+- `handleOnboarding('master')` — masterData bo'lsa REGISTER emas MASTER_HOME ga boradi
+- `goBack()` REGISTER step 2/3 da — qadam orqaga, ONBOARDING ga emas
+- `showToast` race condition — `_toastTimer` clearTimeout
+- `compressImage` — `reader.onerror` + `img.onerror` bilan reject
+- `window.location.href = 'tg://'` → SPA crash → `window.open(..., '_blank')`
+- Galereya darhol yopilishi → `display:none` → `position:fixed off-screen`
+- Galereya qayta ochilishi → phantom click → 1.5s cooldown
