@@ -57,6 +57,10 @@ async function initDb() {
       if (res.ok) {
         const json = await res.json();
         db.data = json.record;
+        if (!db.data.masters) db.data.masters = [];
+        if (!db.data.clients) db.data.clients = [];
+        if (!db.data.reviews) db.data.reviews = [];
+        if (!db.data.waiting_clients) db.data.waiting_clients = [];
         if (!db.data.orders) db.data.orders = [];
         console.log('JSONBin: ma\'lumotlar yuklandi ✅');
       } else {

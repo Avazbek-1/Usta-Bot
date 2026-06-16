@@ -1187,7 +1187,8 @@ function bindRating() {
 
   document.getElementById('saveRating')?.addEventListener('click', async (e) => {
     if (!selectedRating) { showToast('Yulduz tanlang'); return; }
-    e.currentTarget.disabled = true;
+    const btn = e.currentTarget;
+    btn.disabled = true;
     const comment = document.getElementById('reviewComment').value.trim();
     try {
       await api('POST', '/api/reviews', {
@@ -1200,7 +1201,7 @@ function bindRating() {
       const master = await api('GET', `/api/masters/${appState.ratingMasterId}`);
       navigate(PAGES.PROFILE, { viewedMaster: master });
     } catch (err) {
-      e.currentTarget.disabled = false;
+      btn.disabled = false;
       showToast('❌ ' + err.message);
     }
   });
@@ -1343,8 +1344,11 @@ async function bindOrders() {
 
     container.querySelectorAll('.order-contact-btn').forEach(btn => {
       btn.addEventListener('click', async () => {
+        if (btn.disabled) return;
+        btn.disabled = true;
         try { await api('POST', `/api/orders/${btn.dataset.oid}/contact`); } catch (_) {}
         window.open(`tg://user?id=${btn.dataset.ctid}`, '_blank');
+        btn.disabled = false;
       });
     });
   } catch (err) {

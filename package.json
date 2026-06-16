@@ -13,8 +13,7 @@
   "dependencies": {
     "dotenv": "^17.4.2",
     "express": "^5.2.1",
-    "grammy": "^1.43.0",
-    "lowdb": "^7.0.1"
+    "grammy": "^1.43.0"
   },
   "devDependencies": {
     "nodemon": "^3.1.14"
