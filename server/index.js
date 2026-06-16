@@ -269,6 +269,7 @@ app.post('/api/masters/:id/photos', async (req, res) => {
 
   const { photo_url } = req.body;
   if (!photo_url) return res.status(400).json({ error: 'photo_url kerak' });
+  if (!photo_url.startsWith('data:image/')) return res.status(400).json({ error: 'Faqat rasm fayli yuborilishi mumkin' });
 
   master.photos.push(photo_url);
   await db.write();

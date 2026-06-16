@@ -355,11 +355,11 @@ function renderMasterHome() {
     <div class="page-content">
       <div class="stats-row card">
         <div class="stat-card">
-          <div class="stat-value">${masterData.views}</div>
+          <div class="stat-value">${masterData.views || 0}</div>
           <div class="stat-label">Ko'rish</div>
         </div>
         <div class="stat-card">
-          <div class="stat-value">${masterData.contacts}</div>
+          <div class="stat-value">${masterData.contacts || 0}</div>
           <div class="stat-label">Murojaat</div>
         </div>
         <div class="stat-card">
@@ -676,7 +676,7 @@ function renderSearch() {
   <div class="page">
     <div class="page-header">
       <button class="back-btn" onclick="navigate('${PAGES.CLIENT_HOME}')">←</button>
-      <div class="page-title">${prof.emoji} ${prof.label}</div>
+      <div class="page-title">${prof.emoji} ${esc(prof.label)}</div>
     </div>
     <div class="page-content">
       <div style="color:#666;margin-bottom:12px;font-size:15px">Qaysi hududda?</div>
@@ -715,12 +715,12 @@ function renderResults() {
     <div class="page">
       <div class="page-header">
         <button class="back-btn" onclick="navigate('${PAGES.SEARCH}')">←</button>
-        <div class="page-title">${prof.emoji} ${prof.label} · ${dist.label}</div>
+        <div class="page-title">${prof.emoji} ${esc(prof.label)} · ${esc(dist.label)}</div>
       </div>
       <div class="empty-state">
         <div class="empty-icon">😔</div>
         <div class="empty-title">Hozircha usta yo'q</div>
-        <div class="empty-text">Bu hududda hozircha ${prof.label.toLowerCase()} yo'q.</div>
+        <div class="empty-text">Bu hududda hozircha ${esc(prof.label.toLowerCase())} yo'q.</div>
         <div style="height:24px"></div>
         <button class="btn-primary" onclick="navigate('${PAGES.ORDER_FORM}')">📝 Buyurtma berish</button>
         <button class="btn-secondary btn-gap" id="leaveNumber">📱 Raqamni qoldirish</button>
@@ -743,7 +743,7 @@ function renderResults() {
   <div class="page">
     <div class="page-header">
       <button class="back-btn" onclick="navigate('${PAGES.SEARCH}')">←</button>
-      <div class="page-title">${prof.emoji} ${prof.label} · ${dist.label}</div>
+      <div class="page-title">${prof.emoji} ${esc(prof.label)} · ${esc(dist.label)}</div>
     </div>
     <div class="page-content">
       <div style="color:#666;margin-bottom:12px;font-size:14px">${results.length} ta usta topildi</div>
@@ -821,7 +821,7 @@ function renderProfile() {
           <div class="stat-label">Reyting</div>
         </div>
         <div class="stat-card">
-          <div class="stat-value">${m.review_count}</div>
+          <div class="stat-value">${m.review_count || 0}</div>
           <div class="stat-label">Izoh</div>
         </div>
         <div class="stat-card">
@@ -1129,6 +1129,8 @@ function bindPhotos() {
   document.querySelectorAll('[data-del]').forEach(el => {
     el.addEventListener('click', async (e) => {
       e.stopPropagation();
+      if (el.dataset.deleting) return;
+      el.dataset.deleting = '1';
       const idx = Number(el.dataset.del);
       try {
         const res = await api('DELETE', `/api/masters/${masterData.id}/photos/${idx}`);
@@ -1136,6 +1138,7 @@ function bindPhotos() {
         render();
         showToast('🗑️ Rasm o\'chirildi');
       } catch (err) {
+        delete el.dataset.deleting;
         showToast('❌ ' + err.message);
       }
     });
