@@ -372,6 +372,7 @@ async function start() {
       console.error('Bot sozlash xatosi:', e.message);
     }
   } else if (hasToken) {
+    await bot.api.deleteWebhook();
     bot.start();
     console.log('Bot long polling rejimida (local)...');
   } else {

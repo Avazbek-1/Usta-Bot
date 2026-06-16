@@ -563,7 +563,7 @@ function bindRegister() {
     document.querySelectorAll('.photo-cell.empty').forEach(el => {
       el.addEventListener('click', () => {
         openFilePicker((compressed) => {
-          if (regData.photos.length < 10) {
+          if (regData.photos.length < 3) {
             regData.photos.push(compressed);
             render();
           }
@@ -1098,14 +1098,26 @@ function renderPhotos() {
 }
 
 function bindPhotos() {
+  let _uploading = false;
+
   const uploadPhoto = () => {
+    if (_uploading) return;
     openFilePicker(async (compressed) => {
+      if (_uploading) return;
+      _uploading = true;
+      const addBtn = document.getElementById('addNewPhoto');
+      const cellBtn = document.getElementById('photoAdd');
+      if (addBtn) addBtn.disabled = true;
+      if (cellBtn) cellBtn.style.pointerEvents = 'none';
       try {
         const res = await api('POST', `/api/masters/${masterData.id}/photos`, { photo_url: compressed });
         masterData.photos = res.photos;
         render();
         showToast('✅ Rasm qo\'shildi');
       } catch (err) {
+        _uploading = false;
+        if (addBtn) addBtn.disabled = false;
+        if (cellBtn) cellBtn.style.pointerEvents = '';
         showToast('❌ ' + err.message);
       }
     });
