@@ -281,7 +281,7 @@ function getProfLabels(master) {
 }
 
 function renderProfBadges(master) {
-  return getProfLabels(master).map(p => `${p.emoji} ${p.label}`).join(' · ');
+  return getProfLabels(master).map(p => `${p.emoji} ${esc(p.label)}`).join(' · ');
 }
 
 function getDistrictLabel(id) {
@@ -768,8 +768,10 @@ function bindResults() {
     });
   });
 
-  document.getElementById('leaveNumber')?.addEventListener('click', async () => {
+  document.getElementById('leaveNumber')?.addEventListener('click', async (e) => {
     if (!userId) { showToast('Telegram orqali kirish kerak'); return; }
+    const btn = e.currentTarget;
+    btn.disabled = true;
     try {
       await api('POST', '/api/waiting', {
         telegram_id: userId,
@@ -778,6 +780,7 @@ function bindResults() {
       });
       showToast('✅ Raqamingiz qoldirildi! Usta paydo bo\'lganda xabar beramiz.');
     } catch (err) {
+      btn.disabled = false;
       showToast('❌ ' + err.message);
     }
   });
@@ -949,8 +952,8 @@ function renderMyProfile() {
     <div class="page-content">
       <div class="stats-row card">
         <div class="stat-card"><div class="stat-value">${masterData.rating > 0 ? masterData.rating : '—'}</div><div class="stat-label">Reyting</div></div>
-        <div class="stat-card"><div class="stat-value">${masterData.review_count}</div><div class="stat-label">Izoh</div></div>
-        <div class="stat-card"><div class="stat-value">${masterData.views}</div><div class="stat-label">Ko'rish</div></div>
+        <div class="stat-card"><div class="stat-value">${masterData.review_count || 0}</div><div class="stat-label">Izoh</div></div>
+        <div class="stat-card"><div class="stat-value">${masterData.views || 0}</div><div class="stat-label">Ko'rish</div></div>
       </div>
       <div class="card">
         <div class="form-label" style="margin-bottom:10px">Ishlar rasmlari</div>

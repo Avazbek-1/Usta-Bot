@@ -99,6 +99,8 @@ app.post('/api/masters', async (req, res) => {
   const existing = db.data.masters.find(m => m.telegram_id === telegram_id);
   if (existing) return res.status(409).json({ error: 'Bu usta allaqachon ro\'yxatdan o\'tgan' });
 
+  const safePhotos = (photos || []).filter(p => typeof p === 'string' && p.startsWith('data:image/'));
+
   const newMaster = {
     id: Date.now(),
     telegram_id,
@@ -106,7 +108,7 @@ app.post('/api/masters', async (req, res) => {
     phone,
     professions: profs,
     district,
-    photos: photos || [],
+    photos: safePhotos,
     rating: 0,
     review_count: 0,
     views: 0,
