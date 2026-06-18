@@ -242,6 +242,11 @@ function setupPhoneInput(inputId) {
     if (!el.value.startsWith('+998')) el.value = '+998 ';
     setTimeout(() => el.setSelectionRange(el.value.length, el.value.length), 0);
   });
+
+  // Agar qiymat allaqachon to'liq raqam bo'lsa (tahrirlash rejimi) — darhol formatlash
+  if (el.value.replace(/\D/g, '').length >= 11) {
+    el.dispatchEvent(new Event('input'));
+  }
 }
 
 function normalizePhone(formatted) {
