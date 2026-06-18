@@ -190,7 +190,7 @@ function openFilePicker(callback) {
 
 function initFilePicker() {
   document.getElementById('globalFileInput').addEventListener('change', async (e) => {
-    _pickerLastOpen = 0; // reset so next open works immediately
+    _pickerLastOpen = 0;
     const file = e.target.files[0];
     if (!file || !_fileCallback) return;
     const cb = _fileCallback;
@@ -204,9 +204,12 @@ function initFilePicker() {
     }
   });
 
-  // Agar foydalanuvchi galereyani yopsa (fayl tanlamasdan), cooldown reset bo'lsin
+  // Galereyani yopsa (fayl tanlamasdan) cooldown reset — iOS uchun visibilitychange ishonchli
+  document.addEventListener('visibilitychange', () => {
+    if (!document.hidden) setTimeout(() => { _pickerLastOpen = 0; }, 300);
+  });
   window.addEventListener('focus', () => {
-    setTimeout(() => { _pickerLastOpen = 0; }, 600);
+    setTimeout(() => { _pickerLastOpen = 0; }, 300);
   });
 }
 
@@ -731,7 +734,7 @@ function renderResults() {
 
   const cards = results.map(m => `
     <div class="master-card" data-id="${m.id}">
-      <div class="avatar">${getInitials(m.name)}</div>
+      <div class="avatar">${esc(getInitials(m.name))}</div>
       <div class="info">
         <div class="name">${esc(m.name)}</div>
         <div class="meta">${renderStars(m.rating, m.review_count)}</div>
@@ -812,7 +815,7 @@ function renderProfile() {
       <div class="page-title">Usta profili</div>
     </div>
     <div class="profile-header card" style="margin:0;border-radius:0">
-      <div class="avatar avatar-lg">${getInitials(m.name)}</div>
+      <div class="avatar avatar-lg">${esc(getInitials(m.name))}</div>
       <div class="name">${esc(m.name)}</div>
       <div class="profession">${renderProfBadges(m)}</div>
       <div class="profession">${dist.emoji} ${esc(dist.label)}</div>

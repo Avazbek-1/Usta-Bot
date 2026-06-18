@@ -85,19 +85,25 @@ POST /api/orders/:id/contact          → contacts++, client_telegram_id qaytara
 - `openFilePicker(callback)` — 1.5s phantom-click muhofazasi (`_pickerLastOpen` timestamp)
 - `initFilePicker()` — change da va window.focus da `_pickerLastOpen = 0` reset
 - Rasm siqish: 800×800 max, JPEG 70%, `compressImage()` Promise reject on error
+- `bindPhotos()` da `_uploading` flag — bir vaqtda ikki upload oldini oladi
 
 ### XSS himoya
 - `esc(str)` funksiyasi — barcha user-controlled data innerHTML ga kirishdan oldin escaped
-- Qo'llanilgan: name, phone, district.label, comment, client_name, description, usta ismi
+- `renderProfBadges()` da `p.label` ham `esc()` orqali o'tadi
+- Server: `photo_url` faqat `data:image/` bilan boshlansa qabul qilinadi (POST /photos ham, POST /api/masters ham)
+- Qo'llanilgan: name, phone, district.label, prof.label, comment, client_name, description, usta ismi
 
 ### API timeout
 - `api()` — `AbortController` bilan 10 soniya timeout; tugasa "So'rov vaqti tugadi (10s)"
 
 ### Double-submit oldini olish
 - `submitRegister` — `_isSubmitting` flag + finishReg/skipPhotos disabled
-- `saveEditBtn` — `btn.disabled = true` saqlash vaqtida
+- `saveEditBtn` — `btn.disabled = true` saqlash vaqtida (e.currentTarget saqlangan)
 - `contactBtn` — `btn.disabled = true` API call vaqtida
-- `saveRating` — `e.currentTarget.disabled = true`
+- `saveRating` — `btn = e.currentTarget` then `btn.disabled = true` (async catch da null xatosi oldini olindi)
+- `order-contact-btn` — `btn.disabled` guard
+- `leaveNumber` — `btn.disabled = true` API call vaqtida
+- `data-del` (photo delete) — `el.dataset.deleting` flag bilan himoyalangan
 
 ### Bog'lanish modal
 - `showContactModal(phone, telegramId)` — bottom sheet overlay, addEventListener (inline onclick yo'q)
@@ -112,6 +118,14 @@ POST /api/orders/:id/contact          → contacts++, client_telegram_id qaytara
 ### bindOrders (async null-safety)
 - `document.getElementById('ordersList')` — await DAN KEYIN tekshiriladi (foydalanuvchi ketib qolishi)
 
+### Bot
+- `/start` komandasi `WEBAPP_URL` yo'q bo'lsa text-only xabar yuboradi (Telegram API crash oldini olish)
+- Dev modda `bot.api.deleteWebhook()` `bot.start()` dan oldin chaqiriladi (production deploydan keyin conflict oldini olish)
+
+### DB (JSONBinDB)
+- `initDb()` — barcha 5 massiv (`masters`, `clients`, `reviews`, `waiting_clients`, `orders`) mavjudligi tekshiriladi
+- `write()` — faqat JSONBIN sozlangan bo'lsa ishlaydi, aks holda silent skip
+
 ## Dizayn qoidalari
 - Fon: `#f7f8fa`, Karta: `#ffffff`, Ko'k: `#0088cc`
 - Tugmalar: `min-height: 48px`, `border-radius: 12px`
@@ -121,6 +135,11 @@ POST /api/orders/:id/contact          → contacts++, client_telegram_id qaytara
 ## Bajarilgan bosqichlar
 - [x] BOSQICH 1–11 — Loyiha, Server, Bot, SPA, Onboarding, Ro'yxat, Usta/Mijoz sahifalari,
        Rasmlar, Qidiruv, Profil, Baho, Buyurtma tizimi, Bug fix + security
+- [x] BUG ROUND 1 — initDb crash, saveRating null ref, order double-click, lowdb olib tashlandi
+- [x] BUG ROUND 2 — foto race condition, bot WEBAPP_URL guard, webhook conflict, register dead code
+- [x] BUG ROUND 3 — photo_url XSS (server), delete double-click, prof/dist label esc(), undefined fallback
+- [x] BUG ROUND 4 — renderMyProfile undefined, renderProfBadges XSS, registration photos XSS, leaveNumber debounce
+- [x] BUG ROUND 5 — iPhone galereya darhol yopilishi (pointer-events:none olib tashlandi), iOS visibilitychange cooldown, renderProfile/renderResults getInitials XSS
 - [ ] BOSQICH 12 — Production deploy (Railway yoki Render.com)
 
 ## Keyingi qadam: BOSQICH 12 — Deploy
@@ -142,3 +161,23 @@ POST /api/orders/:id/contact          → contacts++, client_telegram_id qaytara
 - `window.location.href = 'tg://'` → SPA crash → `window.open(..., '_blank')`
 - Galereya darhol yopilishi → `display:none` → `position:fixed off-screen`
 - Galereya qayta ochilishi → phantom click → 1.5s cooldown
+- `saveRating` async catch da `e.currentTarget` null → `const btn = e.currentTarget` saqlandi
+- `initDb()` faqat `orders` ni tekshirardi → barcha 5 massiv tekshiriladi
+- `order-contact-btn` double-click → `btn.disabled` guard qo'shildi
+- `lowdb` import qilinmasdan package.json da turardi → olib tashlandi
+- `bindPhotos()` upload race condition → `_uploading` flag
+- `bot /start` + `WEBAPP_URL` undefined → Telegram API xato → guard qo'shildi
+- Dev `bot.start()` webhook conflict → `deleteWebhook()` oldin chaqirildi
+- `register step3` `< 10` dead code → `< 3` (slot soni bilan mos)
+- `POST /api/masters/:id/photos` `photo_url` validatsiyasiz → `data:image/` tekshiruvi
+- `bindPhotos()` delete double-click → index siljishi → `data-deleting` flag
+- `renderSearch/Results` `prof.label`, `dist.label` `esc()` siz → XSS
+- `renderMasterHome()` `views||0`, `contacts||0` — eski yozuvlar undefined
+- `renderProfile()` `review_count||0` — eski yozuvlar undefined
+- `renderMyProfile()` `review_count||0`, `views||0` — o'tkazib yuborilgan sahifa
+- `renderProfBadges()` `p.label` `esc()` siz → XSS (PUT professions validate qilinmaydi)
+- `POST /api/masters` registration `photos` `data:image/` tekshiruvidan o'tmasdi → XSS
+- `leaveNumber` tugmasi disabled guard yo'q edi → qo'shildi
+- `globalFileInput` da `pointer-events:none` → iPhone galereya darhol yopilishi → olib tashlandi
+- iOS da `window.focus` eventi yetarli emas → `visibilitychange` qo'shildi, timeout 600→300ms
+- `renderProfile()` va `renderResults()` da `getInitials()` `esc()` siz → XSS → tuzatildi
