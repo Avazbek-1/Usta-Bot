@@ -132,6 +132,13 @@ POST /api/orders/:id/contact          → contacts++, client_telegram_id qaytara
 - Max kenglik: `480px` (mobil)
 - Til: O'zbek, qisqa jumlalar
 
+## Muhim qoida — Interfeys soddaligi
+**Interfeyni HECH QACHON murakkablashtirma.**
+- Bug fix yoki yangi funksiya qo'shganda mavjud UI ni o'zgartirma
+- Yangi sahifa, modal, dialog qo'shma — agar foydalanuvchi so'ramagan bo'lsa
+- Tugmalar, formlar, navigatsiya — hozirgi holatda qolsin
+- Faqat so'ralgan narsani qil, ortiqcha "yaxshilash" qilma
+
 ## Bajarilgan bosqichlar
 - [x] BOSQICH 1–11 — Loyiha, Server, Bot, SPA, Onboarding, Ro'yxat, Usta/Mijoz sahifalari,
        Rasmlar, Qidiruv, Profil, Baho, Buyurtma tizimi, Bug fix + security
