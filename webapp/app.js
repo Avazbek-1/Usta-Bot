@@ -763,6 +763,7 @@ function renderResults() {
 function bindResults() {
   document.querySelectorAll('.master-card').forEach(el => {
     el.addEventListener('click', async () => {
+      if (currentPage === PAGES.LOADING) return; // double-click guard
       const id = el.dataset.id;
       navigate(PAGES.LOADING);
       try {
@@ -787,6 +788,7 @@ function bindResults() {
         district: appState.selectedDistrict,
       });
       showToast('✅ Raqamingiz qoldirildi! Usta paydo bo\'lganda xabar beramiz.');
+      btn.disabled = false;
     } catch (err) {
       btn.disabled = false;
       showToast('❌ ' + err.message);
@@ -1336,7 +1338,8 @@ async function bindOrders() {
   if (!masterData) return;
 
   try {
-    const profStr = (masterData.professions || []).join(',');
+    const profArr = masterData.professions || (masterData.profession ? [masterData.profession] : []);
+    const profStr = profArr.join(',');
     const orders = await api('GET', `/api/orders?professions=${encodeURIComponent(profStr)}`);
 
     const container = document.getElementById('ordersList');

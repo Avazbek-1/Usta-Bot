@@ -146,7 +146,8 @@ POST /api/orders/:id/contact          → contacts++, client_telegram_id qaytara
 - [x] BUG ROUND 2 — foto race condition, bot WEBAPP_URL guard, webhook conflict, register dead code
 - [x] BUG ROUND 3 — photo_url XSS (server), delete double-click, prof/dist label esc(), undefined fallback
 - [x] BUG ROUND 4 — renderMyProfile undefined, renderProfBadges XSS, registration photos XSS, leaveNumber debounce
-- [x] BUG ROUND 5 — iPhone galereya darhol yopilishi (pointer-events:none olib tashlandi), iOS visibilitychange cooldown, renderProfile/renderResults getInitials XSS
+- [x] BUG ROUND 5 — iPhone galereya darhol yopilishi (pointer-events:none olib tashlandi), iOS visibilitychange cooldown, renderProfile/renderResults getInitials XSS, telefon formatlash
+- [x] BUG ROUND 6 — bindResults double-click race condition, bindOrders eski profession fallback, leaveNumber btn.disabled muvaffaqiyatdan keyin qaytmagan
 - [ ] BOSQICH 12 — Production deploy (Railway yoki Render.com)
 
 ## Keyingi qadam: BOSQICH 12 — Deploy
@@ -185,6 +186,9 @@ POST /api/orders/:id/contact          → contacts++, client_telegram_id qaytara
 - `renderProfBadges()` `p.label` `esc()` siz → XSS (PUT professions validate qilinmaydi)
 - `POST /api/masters` registration `photos` `data:image/` tekshiruvidan o'tmasdi → XSS
 - `leaveNumber` tugmasi disabled guard yo'q edi → qo'shildi
+- `bindResults` double-click → ikki parallel API call, views ikki marta++ → `currentPage === LOADING` guard
+- `bindOrders` `masterData.professions || []` → eski `profession` (birlik) yozuvlarda buyurtmalar ko'rinmaydi → fallback qo'shildi
+- `leaveNumber` muvaffaqiyatdan keyin `btn.disabled = false` yo'q edi → foydalanuvchi qayta bosa olmaydi
 - `globalFileInput` da `pointer-events:none` → iPhone galereya darhol yopilishi → olib tashlandi
 - iOS da `window.focus` eventi yetarli emas → `visibilitychange` qo'shildi, timeout 600→300ms
 - `renderProfile()` va `renderResults()` da `getInitials()` `esc()` siz → XSS → tuzatildi
