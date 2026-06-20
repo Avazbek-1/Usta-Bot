@@ -80,18 +80,18 @@ POST /api/orders/:id/contact          → contacts++, client_telegram_id qaytara
 - `goBack()` — Telegram BackButton uchun; REGISTER da `regStep > 1` bo'lsa qadam orqaga
 
 ### Rasm yuklash (kritik)
-- `globalFileInput` — `display:none` EMAS, `position:fixed;top:-9999px` (Android WebView da
-  display:none bilan galereya darhol yopiladi)
+- `globalFileInput` — `display:none` EMAS, `position:fixed;top:-9999px;opacity:0` (pointer-events:none YO'Q — iOS da galereya darhol yopiladi)
 - `openFilePicker(callback)` — 1.5s phantom-click muhofazasi (`_pickerLastOpen` timestamp)
-- `initFilePicker()` — change da va window.focus da `_pickerLastOpen = 0` reset
+- `initFilePicker()` — `change` da, `visibilitychange` da (iOS!), `window.focus` da `_pickerLastOpen = 0` reset (300ms delay)
 - Rasm siqish: 800×800 max, JPEG 70%, `compressImage()` Promise reject on error
 - `bindPhotos()` da `_uploading` flag — bir vaqtda ikki upload oldini oladi
 
 ### XSS himoya
 - `esc(str)` funksiyasi — barcha user-controlled data innerHTML ga kirishdan oldin escaped
+- `getInitials()` natijasi ham `esc()` orqali o'tadi (renderProfile, renderResults, renderMasterHome, renderMyProfile)
 - `renderProfBadges()` da `p.label` ham `esc()` orqali o'tadi
 - Server: `photo_url` faqat `data:image/` bilan boshlansa qabul qilinadi (POST /photos ham, POST /api/masters ham)
-- Qo'llanilgan: name, phone, district.label, prof.label, comment, client_name, description, usta ismi
+- Qo'llanilgan: name, phone, district.label, prof.label, comment, client_name, description, usta ismi, initials
 
 ### API timeout
 - `api()` — `AbortController` bilan 10 soniya timeout; tugasa "So'rov vaqti tugadi (10s)"
@@ -102,8 +102,9 @@ POST /api/orders/:id/contact          → contacts++, client_telegram_id qaytara
 - `contactBtn` — `btn.disabled = true` API call vaqtida
 - `saveRating` — `btn = e.currentTarget` then `btn.disabled = true` (async catch da null xatosi oldini olindi)
 - `order-contact-btn` — `btn.disabled` guard
-- `leaveNumber` — `btn.disabled = true` API call vaqtida
+- `leaveNumber` — `btn.disabled = true` / `false` (muvaffaqiyat va xato har ikkisida reset)
 - `data-del` (photo delete) — `el.dataset.deleting` flag bilan himoyalangan
+- `bindResults` master-card — `currentPage === PAGES.LOADING` guard (double-click → ikki API call oldini oladi)
 
 ### Bog'lanish modal
 - `showContactModal(phone, telegramId)` — bottom sheet overlay, addEventListener (inline onclick yo'q)
@@ -117,6 +118,11 @@ POST /api/orders/:id/contact          → contacts++, client_telegram_id qaytara
 
 ### bindOrders (async null-safety)
 - `document.getElementById('ordersList')` — await DAN KEYIN tekshiriladi (foydalanuvchi ketib qolishi)
+- Kasblar filtri: `masterData.professions || (masterData.profession ? [masterData.profession] : [])` — eski yozuvlar uchun fallback
+
+### Telefon input mask
+- `setupPhoneInput(id)` — format: `+998 XX-XXX-XX-XX`, prefix o'chirilmaydi (keydown guard)
+- Tahrirlash rejimida (edit profile, register step2 back) darhol formatlash: `el.dispatchEvent(new Event('input'))` triggered if digits >= 11
 
 ### Bot
 - `/start` komandasi `WEBAPP_URL` yo'q bo'lsa text-only xabar yuboradi (Telegram API crash oldini olish)
