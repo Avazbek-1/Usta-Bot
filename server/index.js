@@ -56,7 +56,7 @@ async function initDb() {
       });
       if (res.ok) {
         const json = await res.json();
-        db.data = json.record;
+        db.data = json.record || { masters: [], clients: [], reviews: [], waiting_clients: [], orders: [] };
         if (!db.data.masters) db.data.masters = [];
         if (!db.data.clients) db.data.clients = [];
         if (!db.data.reviews) db.data.reviews = [];

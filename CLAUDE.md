@@ -155,6 +155,7 @@ POST /api/orders/:id/contact          → contacts++, client_telegram_id qaytara
 - [x] BUG ROUND 5 — iPhone galereya darhol yopilishi (pointer-events:none olib tashlandi), iOS visibilitychange cooldown, renderProfile/renderResults getInitials XSS, telefon formatlash
 - [x] BUG ROUND 6 — bindResults double-click race condition, bindOrders eski profession fallback, leaveNumber btn.disabled muvaffaqiyatdan keyin qaytmagan
 - [x] BUG ROUND 7 — showContactModal tgLink <a href="tg://"> → button+window.open (SPA crash), server master.photos undefined (eski yozuvlar uchun || [] guard)
+- [x] BUG ROUND 8 — bindSearch double-click guard, bindRating inner GET try-catch (POST muvaffaqiyat lekin GET fail bo'lsa navigate qilinadi), bindPhotos render() faqat PHOTOS sahifasida (navigatsiya paytida yozilmagan o'zgarishlar yo'qolishi oldini olish), initDb json.record null guard
 - [ ] BOSQICH 12 — Production deploy (Railway yoki Render.com)
 
 ## Keyingi qadam: BOSQICH 12 — Deploy
@@ -201,3 +202,7 @@ POST /api/orders/:id/contact          → contacts++, client_telegram_id qaytara
 - `renderProfile()` va `renderResults()` da `getInitials()` `esc()` siz → XSS → tuzatildi
 - `showContactModal()` da `tgLink` `<a href="tg://...">` edi → SPA crash → `<button>` + `window.open()` ga o'zgartirildi
 - `POST/DELETE /api/masters/:id/photos` da `master.photos` undefined bo'lsa crash → `|| []` guard qo'shildi
+- `bindSearch()` da double-click guard yo'q edi → ikki parallel API call, race condition → `currentPage === PAGES.LOADING` guard qo'shildi
+- `bindRating()` da POST muvaffaqiyat bo'lsa, GET fail bo'lganda btn stuck va chalkash xato → inner try-catch, navigate(PAGES.PROFILE) GET siz ham amalga oshiriladi
+- `bindPhotos()` da foto upload/delete tugaganda `render()` har doim chaqirilar edi → foydalanuvchi EDIT_PROFILE ga o'tib ketsa, yozilmagan o'zgarishlar yo'qolardi → `if (currentPage === PAGES.PHOTOS) render()`
+- `initDb()` da `json.record` null bo'lsa crash (`db.data.masters` xato) → `json.record || { masters:[], ... }` guard

@@ -699,6 +699,7 @@ function renderSearch() {
 function bindSearch() {
   document.querySelectorAll('#distSelect .chip').forEach(el => {
     el.addEventListener('click', async () => {
+      if (currentPage === PAGES.LOADING) return; // double-click guard
       navigate(PAGES.LOADING);
       try {
         const q = `?profession=${appState.selectedProfession}&district=${el.dataset.dist}`;
@@ -1127,7 +1128,7 @@ function bindPhotos() {
       try {
         const res = await api('POST', `/api/masters/${masterData.id}/photos`, { photo_url: compressed });
         masterData.photos = res.photos;
-        render();
+        if (currentPage === PAGES.PHOTOS) render();
         showToast('✅ Rasm qo\'shildi');
       } catch (err) {
         _uploading = false;
@@ -1150,7 +1151,7 @@ function bindPhotos() {
       try {
         const res = await api('DELETE', `/api/masters/${masterData.id}/photos/${idx}`);
         masterData.photos = res.photos;
-        render();
+        if (currentPage === PAGES.PHOTOS) render();
         showToast('🗑️ Rasm o\'chirildi');
       } catch (err) {
         delete el.dataset.deleting;
@@ -1228,8 +1229,12 @@ function bindRating() {
         comment,
       });
       showToast('✅ Bahoyingiz saqlandi!');
-      const master = await api('GET', `/api/masters/${appState.ratingMasterId}`);
-      navigate(PAGES.PROFILE, { viewedMaster: master });
+      try {
+        const master = await api('GET', `/api/masters/${appState.ratingMasterId}`);
+        navigate(PAGES.PROFILE, { viewedMaster: master });
+      } catch (_) {
+        navigate(PAGES.PROFILE);
+      }
     } catch (err) {
       btn.disabled = false;
       showToast('❌ ' + err.message);
