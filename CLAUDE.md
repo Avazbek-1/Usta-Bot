@@ -154,6 +154,7 @@ POST /api/orders/:id/contact          → contacts++, client_telegram_id qaytara
 - [x] BUG ROUND 4 — renderMyProfile undefined, renderProfBadges XSS, registration photos XSS, leaveNumber debounce
 - [x] BUG ROUND 5 — iPhone galereya darhol yopilishi (pointer-events:none olib tashlandi), iOS visibilitychange cooldown, renderProfile/renderResults getInitials XSS, telefon formatlash
 - [x] BUG ROUND 6 — bindResults double-click race condition, bindOrders eski profession fallback, leaveNumber btn.disabled muvaffaqiyatdan keyin qaytmagan
+- [x] BUG ROUND 7 — showContactModal tgLink <a href="tg://"> → button+window.open (SPA crash), server master.photos undefined (eski yozuvlar uchun || [] guard)
 - [ ] BOSQICH 12 — Production deploy (Railway yoki Render.com)
 
 ## Keyingi qadam: BOSQICH 12 — Deploy
@@ -198,3 +199,5 @@ POST /api/orders/:id/contact          → contacts++, client_telegram_id qaytara
 - `globalFileInput` da `pointer-events:none` → iPhone galereya darhol yopilishi → olib tashlandi
 - iOS da `window.focus` eventi yetarli emas → `visibilitychange` qo'shildi, timeout 600→300ms
 - `renderProfile()` va `renderResults()` da `getInitials()` `esc()` siz → XSS → tuzatildi
+- `showContactModal()` da `tgLink` `<a href="tg://...">` edi → SPA crash → `<button>` + `window.open()` ga o'zgartirildi
+- `POST/DELETE /api/masters/:id/photos` da `master.photos` undefined bo'lsa crash → `|| []` guard qo'shildi
