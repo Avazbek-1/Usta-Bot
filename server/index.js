@@ -267,6 +267,7 @@ app.post('/api/masters/:id/photos', async (req, res) => {
   await db.read();
   const master = db.data.masters.find(m => m.id === Number(req.params.id));
   if (!master) return res.status(404).json({ error: 'Usta topilmadi' });
+  master.photos = master.photos || [];
   if (master.photos.length >= 10) return res.status(400).json({ error: 'Maksimal 10 ta rasm' });
 
   const { photo_url } = req.body;
@@ -283,6 +284,7 @@ app.delete('/api/masters/:id/photos/:index', async (req, res) => {
   await db.read();
   const master = db.data.masters.find(m => m.id === Number(req.params.id));
   if (!master) return res.status(404).json({ error: 'Usta topilmadi' });
+  master.photos = master.photos || [];
   const idx = Number(req.params.index);
   if (idx < 0 || idx >= master.photos.length) return res.status(400).json({ error: 'Noto\'g\'ri index' });
   master.photos.splice(idx, 1);

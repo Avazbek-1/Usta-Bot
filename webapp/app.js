@@ -901,11 +901,13 @@ function showContactModal(phone, telegramId) {
   callLink.textContent = '📞 Qo\'ng\'iroq qilish';
   callLink.addEventListener('click', () => overlay.remove());
 
-  const tgLink = document.createElement('a');
-  tgLink.href = `tg://user?id=${telegramId}`;
-  tgLink.style.cssText = 'display:block;text-align:center;text-decoration:none;background:#f0f2f5;color:#222;padding:14px;border-radius:12px;font-weight:600;font-size:15px';
+  const tgLink = document.createElement('button');
+  tgLink.style.cssText = 'display:block;width:100%;text-align:center;background:#f0f2f5;color:#222;padding:14px;border-radius:12px;font-weight:600;font-size:15px;border:none;cursor:pointer';
   tgLink.textContent = '✈️ Telegram orqali yozish';
-  tgLink.addEventListener('click', () => overlay.remove());
+  tgLink.addEventListener('click', () => {
+    overlay.remove();
+    window.open(`tg://user?id=${telegramId}`, '_blank');
+  });
 
   const cancelBtn = document.createElement('button');
   cancelBtn.style.cssText = 'background:none;border:none;color:var(--text-secondary);font-size:15px;padding:10px;cursor:pointer';
